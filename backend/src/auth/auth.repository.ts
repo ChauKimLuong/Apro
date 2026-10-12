@@ -30,4 +30,8 @@ export class AuthRepository {
   }): Promise<void> {
     await this.database.authSession.create({ data });
   }
+
+  async deleteSessionByTokenHash(tokenHash: string): Promise<void> {
+    await this.database.authSession.deleteMany({ where: { tokenHash } });
+  }
 }

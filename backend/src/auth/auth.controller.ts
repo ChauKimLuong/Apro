@@ -9,8 +9,13 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
-import { AUTH_SESSION_COOKIE, type AuthenticatedRequest } from './auth-session';
+import type { Request, Response } from 'express';
+import {
+  AUTH_SESSION_COOKIE,
+  getAuthSessionCookieOptions,
+  readAuthSessionCookie,
+  type AuthenticatedRequest,
+} from './auth-session';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AuthSessionGuard } from './guards/auth-session.guard';
@@ -31,14 +36,21 @@ export class AuthController {
     );
 
     response.cookie(AUTH_SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
+      ...getAuthSessionCookieOptions(),
       expires: expiresAt,
     });
 
     return user;
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    await this.authService.logout(readAuthSessionCookie(request));
+    response.clearCookie(AUTH_SESSION_COOKIE, getAuthSessionCookieOptions());
   }
 
   @Get('me')

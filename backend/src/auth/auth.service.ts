@@ -70,6 +70,14 @@ export class AuthService {
     };
   }
 
+  async logout(token: unknown): Promise<void> {
+    if (typeof token !== 'string' || token.length === 0) {
+      return;
+    }
+
+    await this.authRepository.deleteSessionByTokenHash(hashSessionToken(token));
+  }
+
   async getSessionUser(token: unknown): Promise<AuthenticatedUser> {
     if (typeof token !== 'string' || token.length === 0) {
       throw new UnauthorizedException(invalidSession);
