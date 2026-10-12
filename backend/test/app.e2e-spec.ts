@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -14,6 +15,7 @@ describe('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(createValidationPipe());
     await app.init();
   });
@@ -39,6 +41,22 @@ describe('AppController (e2e)', () => {
         ],
       });
   });
+
+  it.each([undefined, 'apro_session=unknown-session'])(
+    'GET /auth/me rejects a missing or unknown session cookie (%s)',
+    (cookie) => {
+      const currentUser = request(app.getHttpServer()).get('/auth/me');
+      if (cookie) {
+        currentUser.set('Cookie', cookie);
+      }
+
+      return currentUser.expect(401).expect({
+        statusCode: 401,
+        code: 'INVALID_SESSION',
+        message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn',
+      });
+    },
+  );
 
   afterEach(async () => {
     await app.close();

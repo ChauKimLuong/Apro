@@ -11,6 +11,18 @@ export class AuthRepository {
     });
   }
 
+  findSessionByTokenHash(tokenHash: string) {
+    return this.database.authSession.findUnique({
+      where: { tokenHash },
+      select: {
+        expiresAt: true,
+        user: {
+          select: { id: true, email: true, fullName: true, status: true },
+        },
+      },
+    });
+  }
+
   async createSession(data: {
     tokenHash: string;
     userId: string;

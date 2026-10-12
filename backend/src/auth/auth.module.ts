@@ -3,10 +3,11 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthController } from './auth.controller';
 import { AuthRepository } from './auth.repository';
 import { AuthService } from './auth.service';
+import { AuthSessionGuard } from './guards/auth-session.guard';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [AuthController],
-  providers: [AuthService, AuthRepository],
+  providers: [AuthService, AuthRepository, AuthSessionGuard],
 })
 export class AuthModule {}
