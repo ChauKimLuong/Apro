@@ -19,11 +19,18 @@ import {
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { AuthSessionGuard } from './guards/auth-session.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  register(@Body() body: RegisterDto) {
+    return this.authService.register(body.fullName, body.email, body.password);
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
