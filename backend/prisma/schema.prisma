@@ -28,7 +28,8 @@ model User {
   status       UserStatus @default(ACTIVE)
   passwordHash String     @map("password_hash")
 
-  sessions AuthSession[]
+  sessions          AuthSession[]
+  passwordResetCode PasswordResetCode?
 
   @@map("users")
 }
@@ -41,4 +42,17 @@ model AuthSession {
 
   @@index([userId])
   @@map("auth_sessions")
+}
+
+model PasswordResetCode {
+  userId         String    @id @map("user_id") @db.Uuid
+  codeHash       String    @map("code_hash")
+  issuedAt       DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_codes")
 }

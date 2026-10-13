@@ -1,0 +1,42 @@
+# Chạy từ trên xuống. Giữ giá trị apro_session từ lần login để thử lại token sau khi logout.
+@baseUrl = http://localhost:3002
+
+### Đăng nhập lấy cookie phiên - 200
+# @prompt password Nhập mật khẩu hiện tại của tài khoản ACTIVE
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "ACTIVE@example.test",
+  "password": "{{password}}"
+}
+
+### Xem tài khoản hiện tại bằng cookie phiên - 200
+# Chạy sau ca đăng nhập ACTIVE đúng mật khẩu. REST Client gửi lại cookie đã lưu.
+GET {{baseUrl}}/auth/me
+
+### Đăng xuất phiên vừa login - 204
+# Chạy sau ca login ACTIVE đúng mật khẩu. Có thể giữ giá trị apro_session để chạy ca dùng lại token cũ bên dưới.
+POST {{baseUrl}}/auth/logout
+
+### Xem tài khoản sau đăng xuất - 401 INVALID_SESSION
+GET {{baseUrl}}/auth/me
+
+### Dùng lại token cũ đã thu hồi - 401 INVALID_SESSION
+# @no-cookie-jar
+# @prompt password Dán giá trị token cũ, chỉ phần sau apro_session=
+GET {{baseUrl}}/auth/me
+Cookie: apro_session={{password}}
+
+### Đăng xuất lần nữa khi thiếu cookie - 204
+# @no-cookie-jar
+POST {{baseUrl}}/auth/logout
+
+### Xem tài khoản hiện tại khi thiếu cookie - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/auth/me
+
+### Xem tài khoản hiện tại với token không tồn tại - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/auth/me
+Cookie: apro_session=token-khong-ton-tai

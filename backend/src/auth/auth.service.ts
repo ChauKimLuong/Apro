@@ -3,12 +3,21 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { compare, hash } from 'bcrypt';
-import { createHash, randomBytes } from 'node:crypto';
+import {
+  createHash,
+  randomBytes,
+  randomInt,
+  timingSafeEqual,
+} from 'node:crypto';
+import { MailService } from '../mail/mail.service';
 import type { AuthenticatedUser } from './auth-session';
 import { AuthRepository } from './auth.repository';
+import { hashPasswordResetCode } from './password-reset-code';
 
 const invalidCredentials = {
   statusCode: 401,
@@ -22,11 +31,23 @@ const invalidSession = {
   message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn',
 };
 
+const invalidResetCode = {
+  statusCode: 400,
+  code: 'INVALID_RESET_CODE',
+  message: 'Mã OTP không hợp lệ hoặc đã hết hạn',
+};
+
 const sessionLifetimeMs = 8 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly authRepository: AuthRepository) {}
+  private readonly logger = new Logger(AuthService.name);
+
+  constructor(
+    private readonly authRepository: AuthRepository,
+    private readonly config: ConfigService,
+    private readonly mail: MailService,
+  ) {}
 
   async register(fullName: string, email: string, password: string) {
     if (Buffer.byteLength(password, 'utf8') > 72) {
@@ -103,18 +124,78 @@ export class AuthService {
     };
   }
 
+  requestPasswordReset(email: string): void {
+    void this.issuePasswordResetCode(email).catch(() => {
+      this.logger.warn('Không thể xử lý yêu cầu gửi mã đặt lại mật khẩu');
+    });
+  }
+
+  private async issuePasswordResetCode(email: string): Promise<void> {
+    const user = await this.authRepository.findUserByEmail(email);
+
+    if (!user || user.status !== 'ACTIVE') {
+      return;
+    }
+
+    const otp = randomInt(1_000_000).toString().padStart(6, '0');
+    const issuedAt = new Date();
+    const secret = this.config.getOrThrow<string>('PASSWORD_RESET_OTP_SECRET');
+
+    const saved = await this.authRepository.savePasswordResetCode({
+      userId: user.id,
+      codeHash: hashPasswordResetCode(secret, user.id, issuedAt, otp),
+      issuedAt,
+      expiresAt: new Date(issuedAt.getTime() + 10 * 60_000),
+    });
+
+    if (saved) {
+      await this.mail.sendPasswordResetCode(user.email, otp);
+    }
+  }
+
+  async resetPassword(
+    email: string,
+    otp: string,
+    newPassword: string,
+  ): Promise<void> {
+    validateNewPasswordLength(newPassword);
+
+    const code = await this.authRepository.findUsablePasswordResetCode(email);
+    if (!code) {
+      throw new BadRequestException(invalidResetCode);
+    }
+
+    const secret = this.config.getOrThrow<string>('PASSWORD_RESET_OTP_SECRET');
+    const actualHash = Buffer.from(
+      hashPasswordResetCode(secret, code.userId, code.issuedAt, otp),
+      'hex',
+    );
+    const expectedHash = Buffer.from(code.codeHash, 'hex');
+    if (
+      actualHash.length !== expectedHash.length ||
+      !timingSafeEqual(actualHash, expectedHash)
+    ) {
+      await this.authRepository.incrementPasswordResetAttempts(code);
+      throw new BadRequestException(invalidResetCode);
+    }
+
+    const newPasswordHash = await hash(newPassword, 10);
+    const updated = await this.authRepository.resetPasswordAndRevokeSessions(
+      code,
+      code.user.passwordHash,
+      newPasswordHash,
+    );
+    if (!updated) {
+      throw new BadRequestException(invalidResetCode);
+    }
+  }
+
   async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    if (Buffer.byteLength(newPassword, 'utf8') > 72) {
-      throw new BadRequestException({
-        statusCode: 400,
-        code: 'PASSWORD_TOO_LONG',
-        message: 'Mật khẩu mới không được vượt quá 72 byte',
-      });
-    }
+    validateNewPasswordLength(newPassword);
 
     const user = await this.authRepository.findPasswordByUserId(userId);
 
@@ -189,4 +270,14 @@ export class AuthService {
 
 function hashSessionToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+function validateNewPasswordLength(password: string): void {
+  if (Buffer.byteLength(password, 'utf8') > 72) {
+    throw new BadRequestException({
+      statusCode: 400,
+      code: 'PASSWORD_TOO_LONG',
+      message: 'Mật khẩu mới không được vượt quá 72 byte',
+    });
+  }
 }
