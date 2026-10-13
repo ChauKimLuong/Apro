@@ -1,7 +1,7 @@
 # Nhập mật khẩu hiện tại của tài khoản test. Mặc định ban đầu là SEED_USER_PASSWORD trong backend/.env.
 @baseUrl = http://localhost:3002
 
-### Tài khoản ACTIVE, mật khẩu đúng - 200
+### Tài khoản ACTIVE, mật khẩu đúng - 200 LOGIN_SUCCESS
 # @prompt password Nhập SEED_USER_PASSWORD từ backend/.env
 POST {{baseUrl}}/auth/login
 Content-Type: application/json

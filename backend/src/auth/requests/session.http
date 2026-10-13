@@ -15,7 +15,7 @@ Content-Type: application/json
 # Chạy sau ca đăng nhập ACTIVE đúng mật khẩu. REST Client gửi lại cookie đã lưu.
 GET {{baseUrl}}/auth/me
 
-### Đăng xuất phiên vừa login - 204
+### Đăng xuất phiên vừa login - 200 LOGOUT_SUCCESS
 # Chạy sau ca login ACTIVE đúng mật khẩu. Có thể giữ giá trị apro_session để chạy ca dùng lại token cũ bên dưới.
 POST {{baseUrl}}/auth/logout
 
@@ -28,7 +28,7 @@ GET {{baseUrl}}/auth/me
 GET {{baseUrl}}/auth/me
 Cookie: apro_session={{password}}
 
-### Đăng xuất lần nữa khi thiếu cookie - 204
+### Đăng xuất lần nữa khi thiếu cookie - 200 LOGOUT_SUCCESS
 # @no-cookie-jar
 POST {{baseUrl}}/auth/logout
 

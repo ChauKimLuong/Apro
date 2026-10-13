@@ -31,8 +31,18 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  register(@Body() body: RegisterDto) {
-    return this.authService.register(body.fullName, body.email, body.password);
+  async register(@Body() body: RegisterDto) {
+    const user = await this.authService.register(
+      body.fullName,
+      body.email,
+      body.password,
+    );
+
+    return {
+      ...user,
+      code: 'REGISTRATION_SUCCESS',
+      message: 'Đăng ký thành công. Tài khoản đang chờ kích hoạt.',
+    };
   }
 
   @Post('login')
@@ -51,17 +61,23 @@ export class AuthController {
       expires: expiresAt,
     });
 
-    return user;
+    return {
+      ...user,
+      code: 'LOGIN_SUCCESS',
+      message: 'Đăng nhập thành công.',
+    };
   }
 
   @Post('logout')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<void> {
+  ) {
     await this.authService.logout(readAuthSessionCookie(request));
     response.clearCookie(AUTH_SESSION_COOKIE, getAuthSessionCookieOptions());
+
+    return { code: 'LOGOUT_SUCCESS', message: 'Đăng xuất thành công.' };
   }
 
   @Post('forgot-password')
@@ -78,23 +94,28 @@ export class AuthController {
 
   @Post('reset-password')
   @UseGuards(ThrottlerGuard)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  resetPassword(@Body() body: ResetPasswordDto): Promise<void> {
-    return this.authService.resetPassword(
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    await this.authService.resetPassword(
       body.email,
       body.otp,
       body.newPassword,
     );
+
+    return {
+      code: 'PASSWORD_RESET_SUCCESS',
+      message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.',
+    };
   }
 
   @Post('password')
   @UseGuards(AuthSessionGuard)
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async changePassword(
     @Req() request: AuthenticatedRequest,
     @Body() body: ChangePasswordDto,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<void> {
+  ) {
     await this.authService.changePassword(
       request.authUser.id,
       body.currentPassword,
@@ -102,6 +123,11 @@ export class AuthController {
     );
 
     response.clearCookie(AUTH_SESSION_COOKIE, getAuthSessionCookieOptions());
+
+    return {
+      code: 'PASSWORD_CHANGE_SUCCESS',
+      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.',
+    };
   }
 
   @Get('me')

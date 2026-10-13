@@ -3,7 +3,7 @@
 @registerTag = 001
 @registerTestPassword = apro-register-2026!
 
-### Đăng ký tài khoản mới - 201
+### Đăng ký tài khoản mới - 201 REGISTRATION_SUCCESS
 # @no-cookie-jar
 POST {{baseUrl}}/auth/register
 Content-Type: application/json

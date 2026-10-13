@@ -7,7 +7,7 @@ import { AuthService } from './auth.service';
 jest.mock('./auth.service', () => ({ AuthService: class AuthService {} }));
 
 describe('AuthController', () => {
-  it('sets the session cookie and returns the public user', async () => {
+  it('sets the session cookie and returns the public user with a success message', async () => {
     const user = {
       id: 'test-user-id',
       email: 'active@example.test',
@@ -35,7 +35,11 @@ describe('AuthController', () => {
 
       await expect(
         controller.login({ email: user.email, password }, response),
-      ).resolves.toEqual(user);
+      ).resolves.toEqual({
+        ...user,
+        code: 'LOGIN_SUCCESS',
+        message: 'Đăng nhập thành công.',
+      });
       expect(login).toHaveBeenCalledWith(user.email, password);
       expect(cookie).toHaveBeenCalledWith(
         'apro_session',
