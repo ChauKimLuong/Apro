@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import type { PermissionCode, Prisma } from '../generated/prisma/client';
+import { isTransactionWriteConflict } from '../database/transaction-write-conflict';
+import {
+  Prisma,
+  type PermissionCode,
+  type RoleScopeType,
+} from '../generated/prisma/client';
 
 const systemRoleFields = {
   id: true,
@@ -9,6 +14,15 @@ const systemRoleFields = {
   description: true,
   isActive: true,
 } satisfies Prisma.SystemRoleSelect;
+
+const roleAssignmentFields = {
+  id: true,
+  scopeType: true,
+  validFrom: true,
+  validUntil: true,
+  revokedAt: true,
+  systemRole: { select: systemRoleFields },
+} satisfies Prisma.RoleAssignmentSelect;
 
 @Injectable()
 export class AuthorizationRepository {
@@ -27,17 +41,89 @@ export class AuthorizationRepository {
       select: {
         roleAssignments: {
           orderBy: [{ validFrom: 'desc' }, { id: 'asc' }],
-          select: {
-            id: true,
-            scopeType: true,
-            validFrom: true,
-            validUntil: true,
-            revokedAt: true,
-            systemRole: { select: systemRoleFields },
-          },
+          select: roleAssignmentFields,
         },
       },
     });
+  }
+
+  async createRoleAssignment(input: {
+    employeeAssignmentId: string;
+    systemRoleId: string;
+    scopeType: RoleScopeType;
+    validFrom: Date;
+    validUntil: Date | null;
+    now: Date;
+  }) {
+    const { employeeAssignmentId, systemRoleId, scopeType, validFrom, now } =
+      input;
+
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const assignment = await tx.employeeAssignment.findUnique({
+            where: { id: employeeAssignmentId },
+            select: {
+              startedAt: true,
+              endedAt: true,
+              user: { select: { status: true } },
+              organizationalUnit: { select: { status: true } },
+              position: { select: { status: true } },
+            },
+          });
+          if (!assignment) return { kind: 'assignment-not-found' } as const;
+
+          const { startedAt, endedAt } = assignment;
+          const validUntil = input.validUntil ?? endedAt;
+          if (
+            assignment.user.status !== 'ACTIVE' ||
+            assignment.organizationalUnit.status !== 'ACTIVE' ||
+            assignment.position.status !== 'ACTIVE' ||
+            validFrom < startedAt ||
+            (endedAt && (endedAt <= now || validFrom >= endedAt)) ||
+            (endedAt && validUntil && validUntil > endedAt)
+          ) {
+            return { kind: 'invalid-assignment' } as const;
+          }
+
+          const role = await tx.systemRole.findUnique({
+            where: { id: systemRoleId },
+            select: { isActive: true },
+          });
+          if (!role?.isActive) return { kind: 'invalid-role' } as const;
+
+          const overlap = await tx.roleAssignment.findFirst({
+            where: {
+              employeeAssignmentId,
+              systemRoleId,
+              scopeType,
+              revokedAt: null,
+              ...(validUntil && { validFrom: { lt: validUntil } }),
+              OR: [{ validUntil: null }, { validUntil: { gt: validFrom } }],
+            },
+            select: { id: true },
+          });
+          if (overlap) return { kind: 'overlap' } as const;
+
+          const grant = await tx.roleAssignment.create({
+            data: {
+              employeeAssignmentId,
+              systemRoleId,
+              scopeType,
+              validFrom,
+              validUntil,
+            },
+            select: roleAssignmentFields,
+          });
+          return { kind: 'created', grant } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (isTransactionWriteConflict(error))
+        return { kind: 'changed' } as const;
+      throw error;
+    }
   }
 
   async hasGlobalPermission(

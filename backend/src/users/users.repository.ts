@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { isTransactionWriteConflict } from '../database/transaction-write-conflict';
 import { Prisma } from '../generated/prisma/client';
 
 type EmployeeAccountInput = {
@@ -46,24 +47,6 @@ function activeAssignmentWhere(now: Date): Prisma.EmployeeAssignmentWhereInput {
     startedAt: { lte: now },
     OR: [{ endedAt: null }, { endedAt: { gt: now } }],
   };
-}
-
-function isAssignmentWriteConflict(error: unknown): boolean {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return error.code === 'P2034';
-  }
-
-  // The PostgreSQL adapter can report a serialization conflict at commit.
-  const cause =
-    error instanceof Error && error.name === 'DriverAdapterError'
-      ? error.cause
-      : undefined;
-  return (
-    typeof cause === 'object' &&
-    cause !== null &&
-    'kind' in cause &&
-    cause.kind === 'TransactionWriteConflict'
-  );
 }
 
 async function findEffectiveManager(
@@ -268,7 +251,8 @@ export class UsersRepository {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (isAssignmentWriteConflict(error)) return { kind: 'changed' } as const;
+      if (isTransactionWriteConflict(error))
+        return { kind: 'changed' } as const;
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (['P2003', 'P2018', 'P2025'].includes(error.code)) {
           return { kind: 'invalid-assignment' } as const;
@@ -348,7 +332,8 @@ export class UsersRepository {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (isAssignmentWriteConflict(error)) return { kind: 'changed' } as const;
+      if (isTransactionWriteConflict(error))
+        return { kind: 'changed' } as const;
       if (
         !(error instanceof Prisma.PrismaClientKnownRequestError) ||
         !['P2003', 'P2018', 'P2025'].includes(error.code)
@@ -443,7 +428,8 @@ export class UsersRepository {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (isAssignmentWriteConflict(error)) return { kind: 'changed' } as const;
+      if (isTransactionWriteConflict(error))
+        return { kind: 'changed' } as const;
       throw error;
     }
   }

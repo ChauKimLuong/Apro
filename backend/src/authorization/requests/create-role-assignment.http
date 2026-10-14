@@ -1,0 +1,133 @@
+@baseUrl = http://localhost:3003
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+@dungAssignmentId = 20000000-0000-4000-8000-000000000104
+@dungEmployeeId = 10000000-0000-4000-8000-000000000104
+@departmentId = 30000000-0000-4000-8000-000000000103
+@deputyPositionId = 40000000-0000-4000-8000-000000000105
+@missingId = 70000000-0000-4000-8000-000000000001
+# Chạy tuần tự trên DB kiểm thử đã seed Công ty A.
+# ID vai trò lấy từ GET /system-roles. Ca cấp sử dụng phạm vi đơn vị.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+POST {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{missingId}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
+}
+
+### Chi thiếu ROLE_ASSIGN - 403 MISSING_PERMISSION
+POST {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{chiAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{missingId}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### Xem danh mục và chọn ID vai trò - 200
+GET {{baseUrl}}/system-roles
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### An cấp vai trò cho phân công của Dũng - 201 ROLE_ASSIGNMENT_CREATED
+# @name createGrant
+# @prompt systemRoleId Nhập ID vai trò đang hoạt động đã chọn trong danh mục
+POST {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{systemRoleId}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Xem lại lần cấp vừa tạo - 200
+GET {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Cấp trùng trong cùng khoảng hiệu lực - 409 ROLE_ASSIGNMENT_OVERLAP
+POST {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{createGrant.response.body.$.data.systemRole.id}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Phân công không tồn tại - 404 ASSIGNMENT_NOT_FOUND
+POST {{baseUrl}}/employee-assignments/{{missingId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{createGrant.response.body.$.data.systemRole.id}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Tạo kiêm nhiệm có thời hạn cho Dũng - 201 CONCURRENT_ASSIGNMENT_CREATED
+# @name createTimedAssignment
+# @prompt assignmentEndsAt Nhập thời điểm kết thúc trong tương lai theo ISO 8601 có múi giờ
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{dungEmployeeId}}",
+  "organizationalUnitId": "{{departmentId}}",
+  "positionId": "{{deputyPositionId}}",
+  "endedAt": "{{assignmentEndsAt}}"
+}
+
+### Thời hạn vượt ngày kết thúc phân công - 400 INVALID_ROLE_ASSIGNMENT_TARGET
+# @prompt laterExpiry Nhập thời điểm sau ngày kết thúc kiêm nhiệm theo ISO 8601 có múi giờ
+POST {{baseUrl}}/employee-assignments/{{createTimedAssignment.response.body.$.data.id}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{createGrant.response.body.$.data.systemRole.id}}",
+  "scopeType": "ORGANIZATIONAL_UNIT",
+  "validUntil": "{{laterExpiry}}"
+}
+
+### Bỏ trống hạn và kế thừa ngày kết thúc kiêm nhiệm - 201 ROLE_ASSIGNMENT_CREATED
+POST {{baseUrl}}/employee-assignments/{{createTimedAssignment.response.body.$.data.id}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{createGrant.response.body.$.data.systemRole.id}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout

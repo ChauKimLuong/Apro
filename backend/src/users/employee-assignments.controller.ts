@@ -12,6 +12,7 @@ import {
 import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { AuthorizationService } from '../authorization/authorization.service';
+import { CreateRoleAssignmentDto } from '../authorization/dto/create-role-assignment.dto';
 import { RoleAssignGuard } from '../authorization/guards/role-assign.guard';
 import { UserUpdateGuard } from '../authorization/guards/user-update.guard';
 import { UserViewGuard } from '../authorization/guards/user-view.guard';
@@ -54,6 +55,16 @@ export class EmployeeAssignmentsController {
     employeeAssignmentId: string,
   ) {
     return this.authorization.listRoleAssignments(employeeAssignmentId);
+  }
+
+  @Post(':employeeAssignmentId/role-assignments')
+  @UseGuards(RoleAssignGuard)
+  createRoleAssignment(
+    @Param('employeeAssignmentId', assignmentIdPipe)
+    employeeAssignmentId: string,
+    @Body() body: CreateRoleAssignmentDto,
+  ) {
+    return this.authorization.createRoleAssignment(employeeAssignmentId, body);
   }
 
   @Post('primary')
