@@ -4,6 +4,7 @@ import {
   Prisma,
   type OrganizationalUnitStatus,
   type OrganizationalUnitType,
+  type PositionType,
 } from '../generated/prisma/client';
 
 const unitFields = {
@@ -13,6 +14,13 @@ const unitFields = {
   status: true,
   parentId: true,
 } satisfies Prisma.OrganizationalUnitSelect;
+
+const positionFields = {
+  id: true,
+  name: true,
+  type: true,
+  status: true,
+} satisfies Prisma.PositionSelect;
 
 const unitLevels = {
   COMPANY: 0,
@@ -227,13 +235,15 @@ export class OrganizationRepository {
 
   listPositions() {
     return this.database.position.findMany({
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        status: true,
-      },
+      select: positionFields,
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  createPosition({ name, type }: { name: string; type: PositionType }) {
+    return this.database.position.create({
+      data: { name, type },
+      select: positionFields,
     });
   }
 }

@@ -8,6 +8,7 @@ import type {
   OrganizationalUnitStatus,
   OrganizationalUnitType,
 } from '../generated/prisma/client';
+import type { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import type { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import type { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { OrganizationRepository } from './organization.repository';
@@ -145,5 +146,15 @@ export class OrganizationService {
 
   async listPositions() {
     return { data: await this.organization.listPositions() };
+  }
+
+  async createPosition(dto: CreateOrganizationPositionDto) {
+    const position = await this.organization.createPosition(dto);
+
+    return {
+      code: 'ORGANIZATION_POSITION_CREATED',
+      message: 'Đã tạo chức danh.',
+      data: position,
+    };
   }
 }

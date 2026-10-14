@@ -12,6 +12,7 @@ import {
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { OrganizationManageGuard } from '../authorization/guards/organization-manage.guard';
 import { OrganizationViewGuard } from '../authorization/guards/organization-view.guard';
+import { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { UpdateOrganizationUnitStatusDto } from './dto/update-organization-unit-status.dto';
@@ -66,5 +67,11 @@ export class OrganizationController {
   @UseGuards(OrganizationViewGuard)
   listPositions() {
     return this.organization.listPositions();
+  }
+
+  @Post('positions')
+  @UseGuards(OrganizationManageGuard)
+  createPosition(@Body() body: CreateOrganizationPositionDto) {
+    return this.organization.createPosition(body);
   }
 }
