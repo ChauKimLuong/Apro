@@ -7,8 +7,10 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { UserCreateGuard } from '../authorization/guards/user-create.guard';
 import { UserUpdateGuard } from '../authorization/guards/user-update.guard';
@@ -57,6 +59,11 @@ export class UsersController {
   @UseGuards(UserUpdateGuard)
   getAssignmentOptions() {
     return this.users.getProvisioningOptions();
+  }
+
+  @Get('me/assignments')
+  getMyAssignments(@Req() request: AuthenticatedRequest) {
+    return this.users.getMyAssignments(request.authUser.id);
   }
 
   @Get(':id')

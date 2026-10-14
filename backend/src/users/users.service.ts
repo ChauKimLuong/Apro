@@ -46,6 +46,11 @@ export class UsersService {
     return { data: employee };
   }
 
+  async getMyAssignments(userId: string) {
+    const { data: employee } = await this.getEmployee(userId);
+    return { data: employee.assignments };
+  }
+
   async getAssignmentHistory(userId: string) {
     const employee = await this.users.findAssignmentHistory(userId, new Date());
 
