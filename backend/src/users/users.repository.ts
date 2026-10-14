@@ -152,6 +152,61 @@ export class UsersRepository {
     }
   }
 
+  async endConcurrentAssignment(userId: string, assignmentId: string) {
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const assignment = await tx.employeeAssignment.findFirst({
+            where: { id: assignmentId, userId },
+            select: {
+              id: true,
+              type: true,
+              isPrimary: true,
+              startedAt: true,
+              endedAt: true,
+            },
+          });
+          if (!assignment) {
+            return { kind: 'not-found' } as const;
+          }
+          if (assignment.type !== 'CONCURRENT' || assignment.isPrimary) {
+            return { kind: 'not-concurrent' } as const;
+          }
+
+          const now = new Date();
+          if (
+            assignment.startedAt >= now ||
+            (assignment.endedAt && assignment.endedAt <= now)
+          ) {
+            return { kind: 'not-active' } as const;
+          }
+
+          const ended = await tx.employeeAssignment.update({
+            where: { id: assignment.id },
+            data: { endedAt: now },
+            select: {
+              id: true,
+              userId: true,
+              startedAt: true,
+              endedAt: true,
+            },
+          });
+          return { kind: 'ended', assignment: ended } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        return { kind: 'changed' } as const;
+      }
+
+      throw error;
+    }
+  }
+
   updateEmployeeStatus(id: string, status: 'ACTIVE' | 'LOCKED') {
     return this.database.$transaction(async (tx) => {
       const [employee] = await tx.user.updateManyAndReturn({

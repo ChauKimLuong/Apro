@@ -27,6 +27,15 @@ const userIdPipe = new ParseUUIDPipe({
     }),
 });
 
+const assignmentIdPipe = new ParseUUIDPipe({
+  exceptionFactory: () =>
+    new BadRequestException({
+      statusCode: 400,
+      code: 'INVALID_ASSIGNMENT_ID',
+      message: 'Vui lòng chọn lại phân công trong hồ sơ nhân viên.',
+    }),
+});
+
 @Controller('users')
 @UseGuards(AuthSessionGuard)
 export class UsersController {
@@ -63,6 +72,15 @@ export class UsersController {
     @Body() body: CreateConcurrentAssignmentDto,
   ) {
     return this.users.createConcurrentAssignment(id, body);
+  }
+
+  @Patch(':userId/assignments/:assignmentId/end')
+  @UseGuards(UserUpdateGuard)
+  endConcurrentAssignment(
+    @Param('userId', userIdPipe) userId: string,
+    @Param('assignmentId', assignmentIdPipe) assignmentId: string,
+  ) {
+    return this.users.endConcurrentAssignment(userId, assignmentId);
   }
 
   @Patch(':id/status')

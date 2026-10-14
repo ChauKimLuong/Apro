@@ -112,6 +112,44 @@ export class UsersService {
     };
   }
 
+  async endConcurrentAssignment(userId: string, assignmentId: string) {
+    const result = await this.users.endConcurrentAssignment(
+      userId,
+      assignmentId,
+    );
+    if (result.kind === 'ended') {
+      return {
+        code: 'CONCURRENT_ASSIGNMENT_ENDED',
+        message: 'Đã kết thúc phân công kiêm nhiệm.',
+        data: result.assignment,
+      };
+    }
+
+    if (result.kind === 'not-found') {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'ASSIGNMENT_NOT_FOUND',
+        message: 'Không tìm thấy phân công trong hồ sơ nhân viên.',
+      });
+    }
+
+    const conflicts = {
+      'not-concurrent': {
+        code: 'ASSIGNMENT_CANNOT_END',
+        message: 'Chỉ có thể kết thúc phân công kiêm nhiệm ở đây.',
+      },
+      'not-active': {
+        code: 'ASSIGNMENT_NOT_ACTIVE',
+        message: 'Phân công chưa bắt đầu hoặc đã kết thúc.',
+      },
+      changed: {
+        code: 'ASSIGNMENT_CHANGED',
+        message: 'Phân công vừa thay đổi. Vui lòng tải lại hồ sơ.',
+      },
+    };
+    throw new ConflictException({ statusCode: 409, ...conflicts[result.kind] });
+  }
+
   async updateEmployeeStatus(id: string, status: 'ACTIVE' | 'LOCKED') {
     const result = await this.users.updateEmployeeStatus(id, status);
 
