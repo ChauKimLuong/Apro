@@ -21,6 +21,48 @@ enum UserStatus {
   @@map("user_status")
 }
 
+enum OrganizationalUnitType {
+  COMPANY
+  DIVISION
+  DEPARTMENT
+  TEAM
+
+  @@map("organizational_unit_type")
+}
+
+enum OrganizationalUnitStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+
+  @@map("organizational_unit_status")
+}
+
+enum PositionType {
+  STAFF
+  LEADER
+  MANAGER
+  EXECUTIVE
+
+  @@map("position_type")
+}
+
+enum PositionStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+
+  @@map("position_status")
+}
+
+enum AssignmentType {
+  OFFICIAL
+  CONCURRENT
+  TEMPORARY
+
+  @@map("assignment_type")
+}
+
 model User {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   fullName     String     @map("full_name")
@@ -30,6 +72,7 @@ model User {
 
   sessions          AuthSession[]
   passwordResetCode PasswordResetCode?
+  assignments       EmployeeAssignment[]
 
   @@map("users")
 }
@@ -55,4 +98,52 @@ model PasswordResetCode {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_codes")
+}
+
+model OrganizationalUnit {
+  id       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String
+  type     OrganizationalUnitType
+  status   OrganizationalUnitStatus @default(ACTIVE)
+  parentId String?                  @map("parent_id") @db.Uuid
+
+  parent      OrganizationalUnit?  @relation("UnitHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_units_parent")
+  children    OrganizationalUnit[] @relation("UnitHierarchy")
+  assignments EmployeeAssignment[]
+
+  @@map("organizational_units")
+}
+
+model Position {
+  id     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name   String
+  type   PositionType
+  status PositionStatus @default(ACTIVE)
+
+  assignments EmployeeAssignment[]
+
+  @@map("positions")
+}
+
+model EmployeeAssignment {
+  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  organizationalUnitId String         @map("organizational_unit_id") @db.Uuid
+  positionId           String         @map("position_id") @db.Uuid
+  managerAssignmentId  String?        @map("manager_assignment_id") @db.Uuid
+  type                 AssignmentType
+  isPrimary            Boolean        @default(false) @map("is_primary")
+  startedAt            DateTime       @map("started_at") @db.Timestamptz(6)
+  endedAt              DateTime?      @map("ended_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_user")
+  organizationalUnit OrganizationalUnit   @relation(fields: [organizationalUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_unit")
+  position           Position             @relation(fields: [positionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_position")
+  manager            EmployeeAssignment?  @relation("AssignmentManagement", fields: [managerAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_manager")
+  directReports      EmployeeAssignment[] @relation("AssignmentManagement")
+
+  @@unique([id, userId])
+  @@index([userId], map: "ix_assignments_user")
+  @@index([positionId], map: "ix_assignments_position")
+  @@map("employee_assignments")
 }
