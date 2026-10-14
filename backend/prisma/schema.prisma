@@ -63,6 +63,48 @@ enum AssignmentType {
   @@map("assignment_type")
 }
 
+enum PermissionCode {
+  USER_VIEW
+  USER_CREATE
+  USER_UPDATE
+  ORGANIZATION_VIEW
+  ORGANIZATION_MANAGE
+  ROLE_ASSIGN
+  FORM_VIEW
+  FORM_CREATE
+  FORM_UPDATE
+  FORM_REVIEW
+  WORKFLOW_VIEW
+  WORKFLOW_UPDATE
+  WORKFLOW_MANAGE
+  REQUEST_CREATE
+  REQUEST_VIEW
+  REQUEST_SUBMIT
+  REQUEST_CANCEL
+  REQUEST_APPROVE
+  REQUEST_REJECT
+  AUDIT_LOG_VIEW
+
+  @@map("permission_code")
+}
+
+enum SystemRoleCode {
+  SYSTEM_ADMIN
+  WORKFLOW_MANAGER
+  REQUESTER
+  APPROVER
+  AUDITOR
+
+  @@map("system_role_code")
+}
+
+enum RoleScopeType {
+  GLOBAL
+  ORGANIZATIONAL_UNIT
+
+  @@map("role_scope_type")
+}
+
 model User {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   fullName     String     @map("full_name")
@@ -141,9 +183,61 @@ model EmployeeAssignment {
   position           Position             @relation(fields: [positionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_position")
   manager            EmployeeAssignment?  @relation("AssignmentManagement", fields: [managerAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_manager")
   directReports      EmployeeAssignment[] @relation("AssignmentManagement")
+  roleAssignments    RoleAssignment[]
 
   @@unique([id, userId])
   @@index([userId], map: "ix_assignments_user")
   @@index([positionId], map: "ix_assignments_position")
   @@map("employee_assignments")
+}
+
+model Permission {
+  id   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code PermissionCode @unique
+  name String
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model SystemRole {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  code        SystemRoleCode @unique
+  isActive    Boolean        @default(true) @map("is_active")
+
+  rolePermissions RolePermission[]
+  roleAssignments RoleAssignment[]
+
+  @@map("system_roles")
+}
+
+model RoleAssignment {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeAssignmentId String        @map("employee_assignment_id") @db.Uuid
+  systemRoleId         String        @map("system_role_id") @db.Uuid
+  scopeType            RoleScopeType @map("scope_type")
+  validFrom            DateTime      @map("valid_from") @db.Timestamptz(6)
+  validUntil           DateTime?     @map("valid_until") @db.Timestamptz(6)
+  revokedAt            DateTime?     @map("revoked_at") @db.Timestamptz(6)
+
+  employeeAssignment EmployeeAssignment @relation(fields: [employeeAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_role_assignments_employee")
+  systemRole         SystemRole         @relation(fields: [systemRoleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_role_assignments_role")
+
+  @@index([employeeAssignmentId], map: "ix_role_assignments_employee")
+  @@index([systemRoleId], map: "ix_role_assignments_role")
+  @@map("role_assignments")
+}
+
+model RolePermission {
+  systemRoleId String @map("system_role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  systemRole SystemRole @relation(fields: [systemRoleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_role_permissions_role")
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_role_permissions_permission")
+
+  @@id([systemRoleId, permissionId])
+  @@map("role_permissions")
 }
