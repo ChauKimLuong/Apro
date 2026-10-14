@@ -63,6 +63,34 @@ Content-Type: application/json
   "parentId": "{{originalParentId}}"
 }
 
+### Tạo Khối Công nghệ dưới công ty đích - 201 ORGANIZATION_UNIT_CREATED
+# @name createTechnologyDivision
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Khối Công nghệ",
+  "type": "DIVISION",
+  "parentId": "{{createNewParent.response.body.$.data.id}}"
+}
+
+### Đổi Công ty có Khối trực thuộc thành Phòng ban - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+PATCH {{baseUrl}}/organization/units/{{createNewParent.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "type": "DEPARTMENT"
+}
+
+### Đổi loại và cha cùng lúc nhưng cùng cấp - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "type": "DIVISION",
+  "parentId": "{{createTechnologyDivision.response.body.$.data.id}}"
+}
+
 ### Tạo Nhóm Đối soát trong Phòng Kế toán - 201 ORGANIZATION_UNIT_CREATED
 # @name createTeam
 POST {{baseUrl}}/organization/units
@@ -123,7 +151,7 @@ Content-Type: application/json
 }
 
 ### Đọc lại cây sau khi cập nhật - 200
-# Phòng đã lên gốc và Nhóm Đối soát vẫn trực thuộc phòng.
+# Phòng đã lên gốc, Nhóm Đối soát vẫn thuộc phòng, Công ty còn giữ nguyên loại và Khối trực thuộc.
 GET {{baseUrl}}/organization/units
 
 ### Body rỗng - 400 EMPTY_ORGANIZATION_UNIT_UPDATE

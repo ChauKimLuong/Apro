@@ -54,6 +54,7 @@ Content-Type: application/json
 }
 
 ### Admin tạo Phòng Kế toán dưới Công ty - 201 ORGANIZATION_UNIT_CREATED
+# @name createAccountingDepartment
 POST {{baseUrl}}/organization/units
 Content-Type: application/json
 
@@ -93,6 +94,26 @@ Content-Type: application/json
   "name": "Đơn vị có cha đã ngừng hoạt động",
   "type": "TEAM",
   "parentId": "{{inactiveParentId}}"
+}
+
+### Chọn cha cùng cấp - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Công ty không thể nằm dưới Công ty",
+  "type": "COMPANY",
+  "parentId": "{{createCompany.response.body.$.data.id}}"
+}
+
+### Chọn Phòng ban làm cha của Khối - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Khối không thể nằm dưới Phòng ban",
+  "type": "DIVISION",
+  "parentId": "{{createAccountingDepartment.response.body.$.data.id}}"
 }
 
 ### Đăng xuất admin - 200 LOGOUT_SUCCESS

@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
   Prisma,
-  type OrganizationalUnitStatus,
   type OrganizationalUnitType,
 } from '../generated/prisma/client';
 
@@ -13,6 +12,13 @@ const unitFields = {
   status: true,
   parentId: true,
 } satisfies Prisma.OrganizationalUnitSelect;
+
+const unitLevels = {
+  COMPANY: 0,
+  DIVISION: 1,
+  DEPARTMENT: 2,
+  TEAM: 3,
+} satisfies Record<OrganizationalUnitType, number>;
 
 @Injectable()
 export class OrganizationRepository {
@@ -32,23 +38,34 @@ export class OrganizationRepository {
   }) {
     const { name, type, parentId } = input;
     try {
-      return await this.database.organizationalUnit.create({
-        data: {
-          name,
-          type,
-          ...(parentId && {
-            parent: { connect: { id: parentId, status: 'ACTIVE' as const } },
-          }),
+      return await this.database.$transaction(
+        async (tx) => {
+          if (parentId) {
+            const parent = await tx.organizationalUnit.findUnique({
+              where: { id: parentId },
+              select: { type: true, status: true },
+            });
+            if (!parent || parent.status !== 'ACTIVE') {
+              return { kind: 'invalid-parent' } as const;
+            }
+            if (unitLevels[parent.type] >= unitLevels[type]) {
+              return { kind: 'parent-type-conflict', type } as const;
+            }
+          }
+          const unit = await tx.organizationalUnit.create({
+            data: { name, type, parentId: parentId ?? null },
+            select: unitFields,
+          });
+          return { kind: 'created', unit } as const;
         },
-        select: unitFields,
-      });
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
       if (
-        parentId &&
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        ['P2003', 'P2018', 'P2025'].includes(error.code)
+        error.code === 'P2034'
       ) {
-        return null;
+        return { kind: 'changed' } as const;
       }
       throw error;
     }
@@ -70,33 +87,58 @@ export class OrganizationRepository {
         async (tx) => {
           const current = await tx.organizationalUnit.findUnique({
             where: { id },
-            select: { id: true, parentId: true },
+            select: { id: true, parentId: true, type: true },
           });
           if (!current) return { kind: 'not-found' } as const;
 
-          if (parentId && parentId !== current.parentId) {
-            const visited = new Set([current.id]);
-            let parentIsActive = false;
-            let ancestorId: string | null = parentId;
-            while (ancestorId) {
-              if (visited.has(ancestorId)) {
-                return { kind: 'cycle' } as const;
-              }
-              visited.add(ancestorId);
+          const nextType = type ?? current.type;
+          const nextParentId =
+            parentId === undefined ? current.parentId : parentId;
+          const parentChanged = nextParentId !== current.parentId;
+          const typeChanged = nextType !== current.type;
 
-              const ancestor: {
-                parentId: string | null;
-                status: OrganizationalUnitStatus;
-              } | null = await tx.organizationalUnit.findUnique({
-                where: { id: ancestorId },
-                select: { parentId: true, status: true },
-              });
-              if (!ancestor) return { kind: 'invalid-parent' } as const;
-              if (ancestorId === parentId)
-                parentIsActive = ancestor.status === 'ACTIVE';
-              ancestorId = ancestor.parentId;
+          if (nextParentId && (parentChanged || typeChanged)) {
+            const parent = await tx.organizationalUnit.findUnique({
+              where: { id: nextParentId },
+              select: { id: true, parentId: true, type: true, status: true },
+            });
+            if (!parent) return { kind: 'invalid-parent' } as const;
+            if (parentChanged) {
+              if (parent.id === current.id) return { kind: 'cycle' } as const;
+              const visited = new Set([current.id, parent.id]);
+              let ancestorId = parent.parentId;
+              while (ancestorId) {
+                if (visited.has(ancestorId)) return { kind: 'cycle' } as const;
+                visited.add(ancestorId);
+                const ancestor: { parentId: string | null } | null =
+                  await tx.organizationalUnit.findUnique({
+                    where: { id: ancestorId },
+                    select: { parentId: true },
+                  });
+                if (!ancestor) return { kind: 'invalid-parent' } as const;
+                ancestorId = ancestor.parentId;
+              }
+              if (parent.status !== 'ACTIVE')
+                return { kind: 'invalid-parent' } as const;
             }
-            if (!parentIsActive) return { kind: 'invalid-parent' } as const;
+            if (unitLevels[parent.type] >= unitLevels[nextType]) {
+              return { kind: 'parent-type-conflict', type: nextType } as const;
+            }
+          }
+
+          if (typeChanged) {
+            const invalidChildTypes = (
+              Object.keys(unitLevels) as OrganizationalUnitType[]
+            ).filter(
+              (childType) => unitLevels[childType] <= unitLevels[nextType],
+            );
+            const child = await tx.organizationalUnit.findFirst({
+              where: { parentId: current.id, type: { in: invalidChildTypes } },
+              orderBy: [{ type: 'asc' }, { id: 'asc' }],
+              select: { type: true },
+            });
+            if (child)
+              return { kind: 'child-type-conflict', type: child.type } as const;
           }
 
           const unit = await tx.organizationalUnit.update({
