@@ -7,11 +7,12 @@ enum UserStatus {
 }
 
 model User {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  fullName     String     @map("full_name")
-  email        String     @unique(map: "ux_users_email")
-  status       UserStatus @default(ACTIVE)
-  passwordHash String     @map("password_hash")
+  id                         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName                   String     @map("full_name")
+  email                      String     @unique(map: "ux_users_email")
+  status                     UserStatus @default(ACTIVE)
+  passwordHash               String     @map("password_hash")
+  temporaryPasswordExpiresAt DateTime?  @map("temporary_password_expires_at") @db.Timestamptz(3)
 
   sessions          AuthSession[]
   passwordResetCode PasswordResetCode?

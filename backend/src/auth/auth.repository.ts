@@ -118,7 +118,10 @@ export class AuthRepository {
 
       await tx.user.update({
         where: { id: userId },
-        data: { passwordHash: newPasswordHash },
+        data: {
+          passwordHash: newPasswordHash,
+          temporaryPasswordExpiresAt: null,
+        },
       });
       await tx.authSession.deleteMany({ where: { userId } });
       return true;
@@ -143,8 +146,12 @@ export class AuthRepository {
           id: userId,
           status: 'ACTIVE',
           passwordHash: expectedPasswordHash,
+          ...passwordNotExpired(new Date()),
         },
-        data: { passwordHash: newPasswordHash },
+        data: {
+          passwordHash: newPasswordHash,
+          temporaryPasswordExpiresAt: null,
+        },
       });
 
       if (result.count === 0) {
@@ -163,7 +170,13 @@ export class AuthRepository {
       select: {
         expiresAt: true,
         user: {
-          select: { id: true, email: true, fullName: true, status: true },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            status: true,
+            temporaryPasswordExpiresAt: true,
+          },
         },
       },
     });
@@ -181,6 +194,7 @@ export class AuthRepository {
           id: data.userId,
           status: 'ACTIVE',
           passwordHash: verifiedPasswordHash,
+          ...passwordNotExpired(new Date()),
         },
         data: { passwordHash: verifiedPasswordHash },
       });
@@ -197,6 +211,15 @@ export class AuthRepository {
   async deleteSessionByTokenHash(tokenHash: string): Promise<void> {
     await this.database.authSession.deleteMany({ where: { tokenHash } });
   }
+}
+
+function passwordNotExpired(now: Date): Prisma.UserWhereInput {
+  return {
+    OR: [
+      { temporaryPasswordExpiresAt: null },
+      { temporaryPasswordExpiresAt: { gt: now } },
+    ],
+  };
 }
 
 function usableResetCode(now: Date): Prisma.PasswordResetCodeWhereInput {

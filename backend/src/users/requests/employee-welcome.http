@@ -1,0 +1,50 @@
+# Chạy ca cấp tài khoản trong create-employee.http trước, rồi mở Mailpit.
+@baseUrl = http://localhost:3002
+
+### Đăng nhập bằng mật khẩu trong thư chào mừng - 200 mustChangePassword: true
+# @prompt employeeEmail Nhập email vừa được cấp
+# @prompt temporaryPassword Nhập mật khẩu tạm trong Mailpit
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{employeeEmail}}",
+  "password": "{{temporaryPassword}}"
+}
+
+### Phiên mật khẩu tạm bị chặn ở API nghiệp vụ - 403 PASSWORD_CHANGE_REQUIRED
+GET {{baseUrl}}/users/provisioning-options
+
+### Đổi từ mật khẩu tạm sang mật khẩu mới - 200 PASSWORD_CHANGE_SUCCESS
+# @prompt temporaryPassword Nhập mật khẩu tạm trong Mailpit
+# @prompt newPassword Nhập mật khẩu mới có ít nhất 12 ký tự
+POST {{baseUrl}}/auth/password
+Content-Type: application/json
+
+{
+  "currentPassword": "{{temporaryPassword}}",
+  "newPassword": "{{newPassword}}"
+}
+
+### Mật khẩu tạm hết hiệu lực sau khi đổi - 401 INVALID_CREDENTIALS
+# @no-cookie-jar
+# @prompt employeeEmail Nhập email vừa được cấp
+# @prompt temporaryPassword Nhập mật khẩu tạm trong Mailpit
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{employeeEmail}}",
+  "password": "{{temporaryPassword}}"
+}
+
+### Đăng nhập bằng mật khẩu mới - 200 LOGIN_SUCCESS
+# @prompt employeeEmail Nhập email vừa được cấp
+# @prompt newPassword Nhập mật khẩu mới vừa đặt
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{employeeEmail}}",
+  "password": "{{newPassword}}"
+}
