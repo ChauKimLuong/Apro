@@ -8,6 +8,7 @@ import {
 import { hash } from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { MailService } from '../mail/mail.service';
+import type { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
 import type { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UsersRepository } from './users.repository';
 
@@ -43,6 +44,72 @@ export class UsersService {
     }
 
     return { data: employee };
+  }
+
+  async createConcurrentAssignment(
+    userId: string,
+    dto: CreateConcurrentAssignmentDto,
+  ) {
+    const startedAt = dto.startedAt ? new Date(dto.startedAt) : new Date();
+    const endedAt = dto.endedAt ? new Date(dto.endedAt) : null;
+
+    if (
+      Number.isNaN(startedAt.getTime()) ||
+      (endedAt && Number.isNaN(endedAt.getTime()))
+    ) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'INVALID_ASSIGNMENT_PERIOD',
+        message: 'Vui lòng chọn lại thời gian phân công.',
+      });
+    }
+
+    if (endedAt && endedAt <= startedAt) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'INVALID_ASSIGNMENT_PERIOD',
+        message: 'Ngày giờ kết thúc phải sau ngày giờ bắt đầu.',
+      });
+    }
+
+    const result = await this.users.createConcurrentAssignment({
+      userId,
+      organizationalUnitId: dto.organizationalUnitId,
+      positionId: dto.positionId,
+      startedAt,
+      endedAt,
+    });
+
+    if (result.kind === 'duplicates-primary') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'ASSIGNMENT_DUPLICATES_PRIMARY',
+        message:
+          'Phân công kiêm nhiệm trùng với phân công chính. Vui lòng chọn đơn vị hoặc chức danh khác.',
+      });
+    }
+
+    if (result.kind === 'user-not-found') {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy tài khoản nhân viên.',
+      });
+    }
+
+    if (result.kind === 'invalid-assignment') {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'INVALID_EMPLOYEE_ASSIGNMENT',
+        message: 'Vui lòng chọn đơn vị và chức danh đang hoạt động.',
+      });
+    }
+
+    return {
+      code: 'CONCURRENT_ASSIGNMENT_CREATED',
+      message: 'Đã thêm phân công kiêm nhiệm.',
+      data: result.assignment,
+    };
   }
 
   async updateEmployeeStatus(id: string, status: 'ACTIVE' | 'LOCKED') {

@@ -81,6 +81,77 @@ export class UsersRepository {
     });
   }
 
+  async createConcurrentAssignment(input: {
+    userId: string;
+    organizationalUnitId: string;
+    positionId: string;
+    startedAt: Date;
+    endedAt: Date | null;
+  }) {
+    try {
+      return await this.database.$transaction(async (tx) => {
+        const overlappingPrimary = await tx.employeeAssignment.findFirst({
+          where: {
+            userId: input.userId,
+            organizationalUnitId: input.organizationalUnitId,
+            positionId: input.positionId,
+            isPrimary: true,
+            OR: [{ endedAt: null }, { endedAt: { gt: input.startedAt } }],
+            ...(input.endedAt ? { startedAt: { lt: input.endedAt } } : {}),
+          },
+          select: { id: true },
+        });
+
+        if (overlappingPrimary) {
+          return { kind: 'duplicates-primary' } as const;
+        }
+
+        const assignment = await tx.employeeAssignment.create({
+          data: {
+            user: { connect: { id: input.userId } },
+            organizationalUnit: {
+              connect: { id: input.organizationalUnitId, status: 'ACTIVE' },
+            },
+            position: {
+              connect: { id: input.positionId, status: 'ACTIVE' },
+            },
+            type: 'CONCURRENT',
+            isPrimary: false,
+            startedAt: input.startedAt,
+            endedAt: input.endedAt,
+          },
+          select: {
+            ...assignmentRelations,
+            id: true,
+            userId: true,
+            type: true,
+            isPrimary: true,
+            startedAt: true,
+            endedAt: true,
+          },
+        });
+
+        return { kind: 'created', assignment } as const;
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        !['P2003', 'P2018', 'P2025'].includes(error.code)
+      ) {
+        throw error;
+      }
+
+      const employee = await this.database.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true },
+      });
+
+      return employee
+        ? ({ kind: 'invalid-assignment' } as const)
+        : ({ kind: 'user-not-found' } as const);
+    }
+  }
+
   updateEmployeeStatus(id: string, status: 'ACTIVE' | 'LOCKED') {
     return this.database.$transaction(async (tx) => {
       const [employee] = await tx.user.updateManyAndReturn({

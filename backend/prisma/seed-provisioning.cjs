@@ -19,6 +19,7 @@ const accounts = [
 
 const unitId = '30000000-0000-4000-8000-000000000001';
 const positionId = '40000000-0000-4000-8000-000000000001';
+const warehousePositionId = '40000000-0000-4000-8000-000000000002';
 const adminGrantId = '50000000-0000-4000-8000-000000000001';
 
 async function main() {
@@ -66,6 +67,15 @@ async function main() {
         where: { id: positionId },
         update: {},
         create: { id: positionId, name: 'Nhân viên kiểm thử', type: 'STAFF' },
+      });
+      await tx.position.upsert({
+        where: { id: warehousePositionId },
+        update: {},
+        create: {
+          id: warehousePositionId,
+          name: 'Phụ trách kho',
+          type: 'STAFF',
+        },
       });
 
       for (const { assignmentId, ...user } of users) {
