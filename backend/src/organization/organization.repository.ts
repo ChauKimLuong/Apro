@@ -246,4 +246,52 @@ export class OrganizationRepository {
       select: positionFields,
     });
   }
+
+  async updatePosition(
+    id: string,
+    { name, type }: { name?: string; type?: PositionType },
+  ) {
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const current = await tx.position.findUnique({
+            where: { id },
+            select: { type: true },
+          });
+          if (!current) return { kind: 'not-found' } as const;
+
+          if (type === 'STAFF' && current.type !== 'STAFF') {
+            const now = new Date();
+            const actingAssignment = await tx.employeeAssignment.findFirst({
+              where: {
+                positionId: id,
+                type: 'TEMPORARY',
+                OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+              },
+              select: { id: true },
+            });
+            if (actingAssignment) {
+              return { kind: 'has-acting-assignment' } as const;
+            }
+          }
+
+          const position = await tx.position.update({
+            where: { id },
+            data: { name, type },
+            select: positionFields,
+          });
+          return { kind: 'updated', position } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        return { kind: 'changed' } as const;
+      }
+      throw error;
+    }
+  }
 }

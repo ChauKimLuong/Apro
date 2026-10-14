@@ -1,0 +1,71 @@
+@baseUrl = http://localhost:3002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
+@missingPositionId = 70000000-0000-4000-8000-000000000001
+# Chạy tuần tự với cookie jar của REST Client trên database thử nghiệm.
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Tạo chức danh thử - 201 ORGANIZATION_POSITION_CREATED
+# @name createPositionToEdit
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "Kế toán trưởng thử sửa",
+  "type": "MANAGER"
+}
+
+### Chỉ đổi tên, giữ loại MANAGER - 200 ORGANIZATION_POSITION_UPDATED
+PATCH {{baseUrl}}/organization/positions/{{createPositionToEdit.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "  Kế toán trưởng khu vực  "
+}
+
+### Chỉ đổi loại, giữ tên Kế toán trưởng khu vực - 200 ORGANIZATION_POSITION_UPDATED
+PATCH {{baseUrl}}/organization/positions/{{createPositionToEdit.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "type": "LEADER"
+}
+
+### Body rỗng - 400 EMPTY_ORGANIZATION_POSITION_UPDATE
+PATCH {{baseUrl}}/organization/positions/{{createPositionToEdit.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{}
+
+### Chức danh không tồn tại - 404 ORGANIZATION_POSITION_NOT_FOUND
+PATCH {{baseUrl}}/organization/positions/{{missingPositionId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "Kế toán trưởng khu vực"
+}
+
+### Còn phân công tạm quyền nên đổi sang STAFF bị chặn - 409 ORGANIZATION_POSITION_HAS_ACTING_ASSIGNMENTS
+# Tạo dữ liệu bằng ca điều chuyển có người tạm quyền trong ../../users/requests/transfer-assignment.http.
+# Dùng position.id của phân công TEMPORARY trong hồ sơ người tạm quyền. Phân công cần còn hiệu lực hoặc đã lên lịch.
+# @prompt actingPositionId Nhập ID chức danh đang có phân công tạm quyền chưa kết thúc
+PATCH {{baseUrl}}/organization/positions/{{actingPositionId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "type": "STAFF"
+}
