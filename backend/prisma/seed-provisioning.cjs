@@ -109,6 +109,7 @@ async function main() {
         { code: 'USER_VIEW', name: 'Xem danh sách nhân viên' },
         { code: 'USER_UPDATE', name: 'Cập nhật trạng thái tài khoản' },
         { code: 'ORGANIZATION_VIEW', name: 'Xem cơ cấu tổ chức' },
+        { code: 'ORGANIZATION_MANAGE', name: 'Quản lý cơ cấu tổ chức' },
       ]) {
         const permission = await tx.permission.upsert({
           where: { code: data.code },
