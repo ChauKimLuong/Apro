@@ -21,12 +21,69 @@ const unitTypeLabels = {
   TEAM: 'Nhóm',
 } satisfies Record<OrganizationalUnitType, string>;
 
+type ChartUnitRow = Awaited<
+  ReturnType<OrganizationRepository['listChartUnits']>
+>[number];
+type ChartMember = {
+  employeeId: string;
+  fullName: string;
+  assignments: Omit<ChartUnitRow['assignments'][number], 'user'>[];
+};
+type ChartUnit = Omit<ChartUnitRow, 'assignments'> & {
+  members: ChartMember[];
+  children: ChartUnit[];
+};
+
+function buildOrganizationChart(units: ChartUnitRow[]): ChartUnit[] {
+  const nodes = new Map<string, ChartUnit>();
+
+  for (const { assignments, ...unit } of units) {
+    const members = new Map<string, ChartMember>();
+
+    for (const { user, ...assignment } of assignments) {
+      const member = members.get(user.id);
+      if (member) {
+        member.assignments.push(assignment);
+      } else {
+        members.set(user.id, {
+          employeeId: user.id,
+          fullName: user.fullName,
+          assignments: [assignment],
+        });
+      }
+    }
+
+    nodes.set(unit.id, {
+      ...unit,
+      members: [...members.values()],
+      children: [],
+    });
+  }
+
+  const roots: ChartUnit[] = [];
+  for (const node of nodes.values()) {
+    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
 @Injectable()
 export class OrganizationService {
   constructor(private readonly organization: OrganizationRepository) {}
 
   async listUnits() {
     return { data: await this.organization.listUnits() };
+  }
+
+  async getChart() {
+    const units = await this.organization.listChartUnits(new Date());
+    return { data: buildOrganizationChart(units) };
   }
 
   async createUnit(dto: CreateOrganizationUnitDto) {

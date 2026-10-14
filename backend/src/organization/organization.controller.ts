@@ -12,6 +12,7 @@ import {
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { OrganizationManageGuard } from '../authorization/guards/organization-manage.guard';
 import { OrganizationViewGuard } from '../authorization/guards/organization-view.guard';
+import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import { UpdateOrganizationPositionDto } from './dto/update-organization-position.dto';
@@ -48,6 +49,12 @@ export class OrganizationController {
   @UseGuards(OrganizationViewGuard)
   listUnits() {
     return this.organization.listUnits();
+  }
+
+  @Get('chart')
+  @UseGuards(OrganizationViewGuard, UserViewGuard)
+  getChart() {
+    return this.organization.getChart();
   }
 
   @Post('units')
