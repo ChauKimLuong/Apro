@@ -46,6 +46,20 @@ export class UsersService {
     return { data: employee };
   }
 
+  async getAssignmentHistory(userId: string) {
+    const employee = await this.users.findAssignmentHistory(userId, new Date());
+
+    if (!employee) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy tài khoản nhân viên',
+      });
+    }
+
+    return { data: employee.assignments };
+  }
+
   async createConcurrentAssignment(
     userId: string,
     dto: CreateConcurrentAssignmentDto,

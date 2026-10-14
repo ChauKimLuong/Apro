@@ -81,6 +81,26 @@ export class UsersRepository {
     });
   }
 
+  findAssignmentHistory(userId: string, now: Date) {
+    return this.database.user.findUnique({
+      where: { id: userId },
+      select: {
+        assignments: {
+          where: { endedAt: { lte: now } },
+          orderBy: [{ endedAt: 'desc' }, { id: 'asc' }],
+          select: {
+            ...assignmentRelations,
+            id: true,
+            type: true,
+            isPrimary: true,
+            startedAt: true,
+            endedAt: true,
+          },
+        },
+      },
+    });
+  }
+
   async createConcurrentAssignment(input: {
     userId: string;
     organizationalUnitId: string;

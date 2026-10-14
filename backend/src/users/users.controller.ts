@@ -65,6 +65,12 @@ export class UsersController {
     return this.users.getEmployee(id);
   }
 
+  @Get(':userId/assignments/history')
+  @UseGuards(UserViewGuard)
+  getAssignmentHistory(@Param('userId', userIdPipe) userId: string) {
+    return this.users.getAssignmentHistory(userId);
+  }
+
   @Post(':id/assignments')
   @UseGuards(UserUpdateGuard)
   createConcurrentAssignment(
