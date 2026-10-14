@@ -18,5 +18,6 @@ import { AuthSessionGuard } from './guards/auth-session.guard';
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthRepository, AuthSessionGuard],
+  exports: [AuthService, AuthSessionGuard],
 })
 export class AuthModule {}
