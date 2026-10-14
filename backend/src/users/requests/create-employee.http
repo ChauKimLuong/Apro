@@ -1,8 +1,9 @@
-@baseUrl = http://localhost:3002
-@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
-@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
-@unitId = 30000000-0000-4000-8000-000000000001
-@positionId = 40000000-0000-4000-8000-000000000001
+@baseUrl = http://localhost:3003
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@unitId = 30000000-0000-4000-8000-000000000102
+@positionId = 40000000-0000-4000-8000-000000000106
+# Chạy tuần tự với seed Công ty A và Mailpit local.
 
 ### Gửi yêu cầu cấp tài khoản khi chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
@@ -10,58 +11,62 @@ POST {{baseUrl}}/users
 Content-Type: application/json
 
 {
-  "fullName": "Nguyễn Văn An",
+  "fullName": "Nhân viên kiểm thử cấp nội bộ",
   "email": "nhan-vien-001@example.test",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"
 }
 
-### Đăng nhập member - 200
-# @prompt memberPassword Nhập mật khẩu của member@example.test
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "member@example.test",
-  "password": "{{memberPassword}}"
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
 }
 
-### Member gửi yêu cầu cấp tài khoản - 403 MISSING_PERMISSION
+### Chi gửi yêu cầu cấp tài khoản - 403 MISSING_PERMISSION
 POST {{baseUrl}}/users
-X-Employee-Assignment-Id: {{memberActorAssignmentId}}
+X-Employee-Assignment-Id: {{chiAssignmentId}}
 Content-Type: application/json
 
 {
-  "fullName": "Nguyễn Văn An",
+  "fullName": "Nhân viên kiểm thử cấp nội bộ",
   "email": "nhan-vien-001@example.test",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"
 }
 
-### Đăng nhập admin - 200
-# @prompt adminPassword Nhập mật khẩu của admin@example.test
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@example.test",
-  "password": "{{adminPassword}}"
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
 }
 
-### Admin xem đơn vị và chức danh đang hoạt động - 200
+### An xem đơn vị và chức danh đang hoạt động - 200
 GET {{baseUrl}}/users/provisioning-options
-X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+X-Employee-Assignment-Id: {{anAssignmentId}}
 
-### Admin cấp tài khoản - 201 EMPLOYEE_ACCOUNT_CREATED
+### An cấp tài khoản - 201 EMPLOYEE_ACCOUNT_CREATED
 # emailDelivery = SENT khi SMTP nhận thư chào mừng.
+# Kiểm tra thư “Tài khoản Apro của bạn đã được cấp” tại http://127.0.0.1:8025.
 # Lần chạy thứ hai với cùng email trả 409 EMAIL_ALREADY_EXISTS.
 # @prompt employeeEmail Nhập email nhân viên thử chưa có trong cơ sở dữ liệu
 POST {{baseUrl}}/users
-X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+X-Employee-Assignment-Id: {{anAssignmentId}}
 Content-Type: application/json
 
 {
-  "fullName": "Nguyễn Văn An",
+  "fullName": "Nhân viên kiểm thử cấp nội bộ",
   "email": "{{employeeEmail}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"

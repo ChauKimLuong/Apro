@@ -1,34 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { Prisma, type PasswordResetCode } from '../generated/prisma/client';
+import type { PasswordResetCode, Prisma } from '../generated/prisma/client';
 
 type ResetCodeKey = Pick<PasswordResetCode, 'userId' | 'issuedAt' | 'codeHash'>;
 
 @Injectable()
 export class AuthRepository {
   constructor(private readonly database: DatabaseService) {}
-
-  async createInactiveUser(data: {
-    fullName: string;
-    email: string;
-    passwordHash: string;
-  }) {
-    try {
-      return await this.database.user.create({
-        data: { ...data, status: 'INACTIVE' },
-        select: { id: true, fullName: true, email: true, status: true },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        return null;
-      }
-
-      throw error;
-    }
-  }
 
   findUserByEmail(email: string) {
     return this.database.user.findUnique({
