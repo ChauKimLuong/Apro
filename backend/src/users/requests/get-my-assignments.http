@@ -1,4 +1,5 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
 @otherEmployeeId = 10000000-0000-4000-8000-000000000001
 # Chạy tuần tự với cookie jar trong REST Client. Dùng tài khoản từ hai script seed trên database test.
 
@@ -39,6 +40,7 @@ GET {{baseUrl}}/users/me/assignments
 
 ### Member thiếu quyền xem hồ sơ nhân viên khác - 403 MISSING_PERMISSION
 GET {{baseUrl}}/users/{{otherEmployeeId}}
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng xuất member - 200 LOGOUT_SUCCESS
 POST {{baseUrl}}/auth/logout

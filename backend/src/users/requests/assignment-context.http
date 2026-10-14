@@ -1,0 +1,57 @@
+@baseUrl = http://localhost:3002
+@adminUserId = 10000000-0000-4000-8000-000000000001
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
+@organizationId = 30000000-0000-4000-8000-000000000001
+@warehousePositionId = 40000000-0000-4000-8000-000000000002
+# Chạy tuần tự trên DB thử nghiệm có seed phân quyền.
+
+### Có ID phân công nhưng chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/users
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Đọc phân công của tôi trước khi chọn - 200
+GET {{baseUrl}}/users/me/assignments
+
+### Thiếu phân công đang thao tác - 400 ASSIGNMENT_CONTEXT_REQUIRED
+GET {{baseUrl}}/users
+
+### Chọn phân công chính của admin - 200
+GET {{baseUrl}}/users
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+
+### Tạo thêm kiêm nhiệm thử cho cùng admin - 201
+# @name createUnprivilegedAssignment
+POST {{baseUrl}}/users/{{adminUserId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{organizationId}}",
+  "positionId": "{{warehousePositionId}}"
+}
+
+### Giữ cookie, đổi sang kiêm nhiệm chưa được cấp USER_VIEW - 403 MISSING_PERMISSION
+GET {{baseUrl}}/users
+X-Employee-Assignment-Id: {{createUnprivilegedAssignment.response.body.$.data.id}}
+
+### Giữ cookie, chọn lại phân công có quyền - 200
+GET {{baseUrl}}/users
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+
+### Kết thúc bản ghi kiêm nhiệm thử vừa tạo - 200
+PATCH {{baseUrl}}/users/{{adminUserId}}/assignments/{{createUnprivilegedAssignment.response.body.$.data.id}}/end
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+
+### Đăng xuất - 200
+POST {{baseUrl}}/auth/logout

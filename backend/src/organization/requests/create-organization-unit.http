@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @missingParentId = 70000000-0000-4000-8000-000000000001
 # Đổi thành ID của một đơn vị INACTIVE trên database thử nghiệm.
 @inactiveParentId = 70000000-0000-4000-8000-000000000002
@@ -26,6 +28,7 @@ Content-Type: application/json
 
 ### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -46,6 +49,7 @@ Content-Type: application/json
 ### Admin tạo đơn vị gốc - 201 ORGANIZATION_UNIT_CREATED
 # @name createCompany
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -56,6 +60,7 @@ Content-Type: application/json
 ### Admin tạo Phòng Kế toán dưới Công ty - 201 ORGANIZATION_UNIT_CREATED
 # @name createAccountingDepartment
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -66,9 +71,11 @@ Content-Type: application/json
 
 ### Xem lại cây đơn vị - 200
 GET {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Tên toàn khoảng trắng - 400 VALIDATION_ERROR
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -78,6 +85,7 @@ Content-Type: application/json
 
 ### Đơn vị cha không tồn tại - 400 INVALID_PARENT_UNIT
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -88,6 +96,7 @@ Content-Type: application/json
 
 ### Đơn vị cha đã ngừng hoạt động - 400 INVALID_PARENT_UNIT
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -98,6 +107,7 @@ Content-Type: application/json
 
 ### Chọn cha cùng cấp - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -108,6 +118,7 @@ Content-Type: application/json
 
 ### Chọn Phòng ban làm cha của Khối - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {

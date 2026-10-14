@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @unitId = 30000000-0000-4000-8000-000000000001
 @positionId = 40000000-0000-4000-8000-000000000001
 
@@ -26,6 +28,7 @@ Content-Type: application/json
 
 ### Member gửi yêu cầu cấp tài khoản - 403 MISSING_PERMISSION
 POST {{baseUrl}}/users
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -47,12 +50,14 @@ Content-Type: application/json
 
 ### Admin xem đơn vị và chức danh đang hoạt động - 200
 GET {{baseUrl}}/users/provisioning-options
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Admin cấp tài khoản - 201 EMPLOYEE_ACCOUNT_CREATED
 # emailDelivery = SENT khi SMTP nhận thư chào mừng.
 # Lần chạy thứ hai với cùng email trả 409 EMAIL_ALREADY_EXISTS.
 # @prompt employeeEmail Nhập email nhân viên thử chưa có trong cơ sở dữ liệu
 POST {{baseUrl}}/users
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {

@@ -8,12 +8,14 @@ export class AuthorizationRepository {
 
   async hasGlobalPermission(
     userId: string,
+    actorAssignmentId: string,
     code: PermissionCode,
   ): Promise<boolean> {
     const now = new Date();
 
     const grant = await this.database.roleAssignment.findFirst({
       where: {
+        employeeAssignmentId: actorAssignmentId,
         scopeType: 'GLOBAL',
         revokedAt: null,
         validFrom: { lte: now },

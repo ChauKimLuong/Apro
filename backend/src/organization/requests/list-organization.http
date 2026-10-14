@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 # Dùng phiên từ REST Client cookie jar và tài khoản từ seed phân quyền.
 
 ### Danh sách đơn vị khi chưa đăng nhập - 401 INVALID_SESSION
@@ -21,9 +23,11 @@ Content-Type: application/json
 
 ### Member thiếu ORGANIZATION_VIEW khi xem đơn vị - 403 MISSING_PERMISSION
 GET {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Member thiếu ORGANIZATION_VIEW khi xem chức danh - 403 MISSING_PERMISSION
 GET {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng nhập admin - 200
 # @prompt adminPassword Nhập mật khẩu của admin@example.test
@@ -38,10 +42,12 @@ Content-Type: application/json
 ### Admin xem đơn vị và quan hệ cha con - 200
 # Mỗi đơn vị trả id, name, type, status và parentId. Đơn vị gốc có parentId: null.
 GET {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Admin xem chức danh từng trạng thái - 200
 # Mỗi chức danh trả id, name, type và status, gồm cả chức danh INACTIVE nếu đã có trong dữ liệu.
 GET {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất admin - 200 LOGOUT_SUCCESS
 POST {{baseUrl}}/auth/logout

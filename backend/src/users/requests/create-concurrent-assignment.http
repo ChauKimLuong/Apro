@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @employeeId = 10000000-0000-4000-8000-000000000002
 @missingEmployeeId = 70000000-0000-4000-8000-000000000003
 # Các ID mặc định lấy từ seed. Ca 201 giữ cùng đơn vị và chọn chức danh Phụ trách kho.
@@ -30,6 +32,7 @@ Content-Type: application/json
 
 ### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -49,9 +52,11 @@ Content-Type: application/json
 
 ### Xem đơn vị và chức danh đang hoạt động - 200
 GET {{baseUrl}}/users/assignment-options
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Trùng đơn vị, chức danh chính và chồng thời gian - 409 ASSIGNMENT_DUPLICATES_PRIMARY
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -61,6 +66,7 @@ Content-Type: application/json
 
 ### Thêm kiêm nhiệm có hiệu lực ngay - 201 CONCURRENT_ASSIGNMENT_CREATED
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -70,9 +76,11 @@ Content-Type: application/json
 
 ### Xem lại hồ sơ và phân công mới - 200
 GET {{baseUrl}}/users/{{employeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Lên lịch phân công trong tương lai - 201 CONCURRENT_ASSIGNMENT_CREATED
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -84,6 +92,7 @@ Content-Type: application/json
 
 ### Thời gian kết thúc bằng lúc bắt đầu - 400 INVALID_ASSIGNMENT_PERIOD
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -95,6 +104,7 @@ Content-Type: application/json
 
 ### Tài khoản không tồn tại - 404 USER_NOT_FOUND
 POST {{baseUrl}}/users/{{missingEmployeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {

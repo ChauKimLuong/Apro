@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @existingUnitId = 30000000-0000-4000-8000-000000000001
 @positionId = 40000000-0000-4000-8000-000000000001
 # Chạy tuần tự trên database thử nghiệm và bật cookie jar trong REST Client.
@@ -24,6 +26,7 @@ Content-Type: application/json
 
 ### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
 PATCH {{baseUrl}}/organization/units/{{existingUnitId}}/status
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
@@ -41,30 +44,35 @@ Content-Type: application/json
 ### Tạo công ty trống - 201 ORGANIZATION_UNIT_CREATED
 # @name createEmptyUnit
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "name": "Công ty thử đổi trạng thái", "type": "COMPANY" }
 
 ### Ngừng hoạt động đơn vị trống - 200 ORGANIZATION_UNIT_STATUS_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
 
 ### Gửi lại trạng thái hiện tại - 200 ORGANIZATION_UNIT_STATUS_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
 
 ### Kích hoạt lại đơn vị trống - 200 ORGANIZATION_UNIT_STATUS_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "ACTIVE" }
 
 ### LOCKED không còn là trạng thái đơn vị - 400 VALIDATION_ERROR
 PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "LOCKED" }
@@ -72,6 +80,7 @@ Content-Type: application/json
 ### Tạo phòng ban đang hoạt động dưới công ty thử - 201 ORGANIZATION_UNIT_CREATED
 # @name createChildUnit
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -82,24 +91,28 @@ Content-Type: application/json
 
 ### Ngừng đơn vị còn đơn vị con hoạt động - 409 ORGANIZATION_UNIT_HAS_ACTIVE_CHILDREN
 PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
 
 ### Ngừng hoạt động đơn vị con - 200 ORGANIZATION_UNIT_STATUS_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createChildUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
 
 ### Ngừng đơn vị cha sau khi xử lý đơn vị con - 200 ORGANIZATION_UNIT_STATUS_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
 
 ### Kích hoạt đơn vị con khi cha ngừng hoạt động - 409 ORGANIZATION_UNIT_PARENT_INACTIVE
 PATCH {{baseUrl}}/organization/units/{{createChildUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "ACTIVE" }
@@ -107,12 +120,14 @@ Content-Type: application/json
 ### Tạo đơn vị để cấp tài khoản thử - 201 ORGANIZATION_UNIT_CREATED
 # @name createAssignedUnit
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "name": "Đơn vị có phân công thử nghiệm", "type": "DEPARTMENT" }
 
 ### Cấp tài khoản với phân công - 201 EMPLOYEE_ACCOUNT_CREATED
 POST {{baseUrl}}/users
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -124,12 +139,14 @@ Content-Type: application/json
 
 ### Ngừng đơn vị còn phân công - 409 ORGANIZATION_UNIT_HAS_ASSIGNMENTS
 PATCH {{baseUrl}}/organization/units/{{createAssignedUnit.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 { "status": "INACTIVE" }
 
 ### Đọc lại trạng thái từ danh mục - 200
 GET {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất admin - 200 LOGOUT_SUCCESS
 POST {{baseUrl}}/auth/logout

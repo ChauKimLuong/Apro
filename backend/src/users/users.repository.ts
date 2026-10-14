@@ -112,14 +112,18 @@ export class UsersRepository {
             { id: 'asc' },
           ],
           select: {
-            ...assignmentRelations,
             id: true,
             isPrimary: true,
             type: true,
             startedAt: true,
             endedAt: true,
             managerAssignmentId: true,
-            position: { select: { id: true, name: true, type: true } },
+            organizationalUnit: {
+              select: { id: true, name: true, status: true },
+            },
+            position: {
+              select: { id: true, name: true, type: true, status: true },
+            },
           },
         },
       },
@@ -138,6 +142,9 @@ export class UsersRepository {
           );
           return {
             ...assignment,
+            canAct:
+              assignment.organizationalUnit.status === 'ACTIVE' &&
+              assignment.position.status === 'ACTIVE',
             manager: manager ? { fullName: manager.user.fullName } : null,
           };
         },

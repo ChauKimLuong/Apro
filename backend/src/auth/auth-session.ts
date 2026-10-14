@@ -29,4 +29,5 @@ export type AuthenticatedUser = {
 
 export type AuthenticatedRequest = Request & {
   authUser: AuthenticatedUser;
+  actorAssignmentId?: string;
 };

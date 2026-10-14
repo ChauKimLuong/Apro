@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 # Chạy tuần tự trên database thử nghiệm. Luồng chuyển sẽ kết thúc phân công cũ.
 @employeeId = 10000000-0000-4000-8000-000000000002
 @primaryAssignmentId = 20000000-0000-4000-8000-000000000002
@@ -33,6 +35,7 @@ Content-Type: application/json
 
 ### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -52,6 +55,7 @@ Content-Type: application/json
 
 ### Phân công thuộc hồ sơ khác - 404 ASSIGNMENT_NOT_FOUND
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{adminAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -61,6 +65,7 @@ Content-Type: application/json
 
 ### Đơn vị và chức danh giữ nguyên - 409 ASSIGNMENT_UNCHANGED
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -70,6 +75,7 @@ Content-Type: application/json
 
 ### Phân công cũ đang cấp quyền - 409 ASSIGNMENT_HAS_DEPENDENCIES
 PATCH {{baseUrl}}/users/{{adminId}}/assignments/{{adminAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -80,6 +86,7 @@ Content-Type: application/json
 ### Điều chuyển phân công chính - 200 PRIMARY_ASSIGNMENT_TRANSFERRED
 # @name movePrimary
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -89,12 +96,15 @@ Content-Type: application/json
 
 ### Hồ sơ hiển thị phân công mới - 200
 GET {{baseUrl}}/users/{{employeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Lịch sử có phân công chính cũ - 200
 GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Gửi lại từ hồ sơ cũ - 409 ASSIGNMENT_CHANGED
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -109,6 +119,7 @@ Content-Type: application/json
 # @prompt actingUserId ID người tạm quyền
 # @prompt actingUntil Thời điểm kết thúc ISO 8601 có múi giờ
 PATCH {{baseUrl}}/users/{{managerUserId}}/assignments/{{managerAssignmentId}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -121,10 +132,12 @@ Content-Type: application/json
 ### Hồ sơ người tạm quyền có phân công TEMPORARY - 200
 # @prompt actingUserId Nhập ID người tạm quyền ở ca trước
 GET {{baseUrl}}/users/{{actingUserId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Tạo phân công kiêm nhiệm có hạn để chuyển - 201 CONCURRENT_ASSIGNMENT_CREATED
 # @name createConcurrentToMove
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -135,6 +148,7 @@ Content-Type: application/json
 
 ### Tạo kiêm nhiệm khác để kiểm tra trùng - 201 CONCURRENT_ASSIGNMENT_CREATED
 POST {{baseUrl}}/users/{{employeeId}}/assignments
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -144,6 +158,7 @@ Content-Type: application/json
 
 ### Chuyển chính sang vị trí đã kiêm nhiệm - 409 ASSIGNMENT_OVERLAP
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{movePrimary.response.body.$.data.assignment.id}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -153,6 +168,7 @@ Content-Type: application/json
 
 ### Chuyển kiêm nhiệm sang vị trí của phân công chính - 409 ASSIGNMENT_OVERLAP
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createConcurrentToMove.response.body.$.data.id}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -162,6 +178,7 @@ Content-Type: application/json
 
 ### Chuyển kiêm nhiệm trùng một kiêm nhiệm khác - 409 ASSIGNMENT_OVERLAP
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createConcurrentToMove.response.body.$.data.id}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -172,6 +189,7 @@ Content-Type: application/json
 ### Giữ chức danh và chuyển kiêm nhiệm sang đơn vị khác - 200 CONCURRENT_ASSIGNMENT_TRANSFERRED
 # Kỳ vọng data.assignment giữ type CONCURRENT, isPrimary false và thời điểm kết thúc.
 PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createConcurrentToMove.response.body.$.data.id}}/transfer
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -181,6 +199,7 @@ Content-Type: application/json
 
 ### Hồ sơ vẫn có phân công chính sau khi chuyển kiêm nhiệm - 200
 GET {{baseUrl}}/users/{{employeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất admin - 200 LOGOUT_SUCCESS
 POST {{baseUrl}}/auth/logout
