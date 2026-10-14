@@ -1,0 +1,35 @@
+@baseUrl = http://localhost:3002
+
+### Xem danh sách khi chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/users
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu USER_VIEW - 403 MISSING_PERMISSION
+GET {{baseUrl}}/users
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Admin xem danh sách - 200
+# Để xem tài khoản vừa cấp, chạy ca POST trong create-employee.http trước.
+GET {{baseUrl}}/users
+
+### Đăng xuất phiên vừa dùng - 200
+POST {{baseUrl}}/auth/logout

@@ -12,9 +12,104 @@ type EmployeeAccountInput = {
   startedAt: Date;
 };
 
+const employeeFields = {
+  id: true,
+  fullName: true,
+  email: true,
+  status: true,
+} satisfies Prisma.UserSelect;
+
+const assignmentRelations = {
+  organizationalUnit: { select: { id: true, name: true } },
+  position: { select: { id: true, name: true } },
+} satisfies Prisma.EmployeeAssignmentSelect;
+
+function activeAssignmentWhere(now: Date): Prisma.EmployeeAssignmentWhereInput {
+  return {
+    startedAt: { lte: now },
+    OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+  };
+}
+
+function primaryAssignmentSelection(now: Date) {
+  return {
+    where: {
+      isPrimary: true,
+      ...activeAssignmentWhere(now),
+    },
+    orderBy: [{ startedAt: 'desc' }, { id: 'asc' }],
+    take: 1,
+    select: assignmentRelations,
+  } satisfies Prisma.User$assignmentsArgs;
+}
+
 @Injectable()
 export class UsersRepository {
   constructor(private readonly database: DatabaseService) {}
+
+  listEmployees(now: Date) {
+    return this.database.user.findMany({
+      orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
+      select: {
+        ...employeeFields,
+        assignments: primaryAssignmentSelection(now),
+      },
+    });
+  }
+
+  findEmployeeById(id: string, now: Date) {
+    return this.database.user.findUnique({
+      where: { id },
+      select: {
+        ...employeeFields,
+        assignments: {
+          where: activeAssignmentWhere(now),
+          orderBy: [
+            { isPrimary: 'desc' },
+            { startedAt: 'desc' },
+            { id: 'asc' },
+          ],
+          select: {
+            ...assignmentRelations,
+            id: true,
+            isPrimary: true,
+            type: true,
+            startedAt: true,
+          },
+        },
+      },
+    });
+  }
+
+  updateEmployeeStatus(id: string, status: 'ACTIVE' | 'LOCKED') {
+    return this.database.$transaction(async (tx) => {
+      const [employee] = await tx.user.updateManyAndReturn({
+        where: {
+          id,
+          status: { in: ['ACTIVE', 'LOCKED'] },
+        },
+        data: { status },
+        select: employeeFields,
+      });
+
+      if (!employee) {
+        const existing = await tx.user.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+
+        return existing
+          ? ({ kind: 'inactive' } as const)
+          : ({ kind: 'not-found' } as const);
+      }
+
+      if (status === 'LOCKED') {
+        await tx.authSession.deleteMany({ where: { userId: id } });
+      }
+
+      return { kind: 'updated', employee } as const;
+    });
+  }
 
   async listProvisioningOptions() {
     const [organizationalUnits, positions] = await Promise.all([

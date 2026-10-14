@@ -1,0 +1,99 @@
+# Chạy từ trên xuống với admin và member của seed phân quyền trên database local.
+@baseUrl = http://localhost:3002
+@memberId = 10000000-0000-4000-8000-000000000002
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+PATCH {{baseUrl}}/users/{{memberId}}/status
+Content-Type: application/json
+
+{
+  "status": "LOCKED"
+}
+
+### Đăng nhập member - 200
+# Giữ giá trị apro_session từ Set-Cookie để dùng ở hai ca kiểm tra phiên cũ.
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/users/{{memberId}}/status
+Content-Type: application/json
+
+{
+  "status": "LOCKED"
+}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Admin khóa member - 200 USER_STATUS_UPDATED
+PATCH {{baseUrl}}/users/{{memberId}}/status
+Content-Type: application/json
+
+{
+  "status": "LOCKED"
+}
+
+### Cookie cũ của member sau khi khóa - 401 INVALID_SESSION
+# @no-cookie-jar
+# @prompt oldMemberSession Dán giá trị cookie cũ, chỉ phần sau apro_session=
+GET {{baseUrl}}/auth/me
+Cookie: apro_session={{oldMemberSession}}
+
+### Member đăng nhập khi đang bị khóa - 403 ACCOUNT_LOCKED
+# @no-cookie-jar
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Admin mở khóa member - 200 USER_STATUS_UPDATED
+PATCH {{baseUrl}}/users/{{memberId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Cookie cũ của member sau khi mở khóa - 401 INVALID_SESSION
+# @no-cookie-jar
+# @prompt oldMemberSession Dán lại đúng cookie cũ của member
+GET {{baseUrl}}/auth/me
+Cookie: apro_session={{oldMemberSession}}
+
+### Đăng xuất admin - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout
+
+### Member đăng nhập lại sau khi mở khóa - 200 LOGIN_SUCCESS
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Phiên mới của member hoạt động - 200
+GET {{baseUrl}}/auth/me
+
+### Đăng xuất member - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout
