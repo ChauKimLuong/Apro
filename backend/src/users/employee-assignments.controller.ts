@@ -16,6 +16,7 @@ import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
 import { CreatePrimaryAssignmentDto } from './dto/create-primary-assignment.dto';
 import { TransferAssignmentDto } from './dto/transfer-assignment.dto';
+import { UpdateAssignmentManagerDto } from './dto/update-assignment-manager.dto';
 import { assignmentIdPipe, userIdPipe } from './pipes/resource-id.pipes';
 import { UsersService } from './users.service';
 
@@ -51,6 +52,18 @@ export class EmployeeAssignmentsController {
   @UseGuards(UserUpdateGuard)
   createConcurrentAssignment(@Body() body: CreateConcurrentAssignmentDto) {
     return this.users.createConcurrentAssignment(body);
+  }
+
+  @Patch(':assignmentId/manager')
+  @UseGuards(UserUpdateGuard)
+  updateAssignmentManager(
+    @Param('assignmentId', assignmentIdPipe) assignmentId: string,
+    @Body() body: UpdateAssignmentManagerDto,
+  ) {
+    return this.users.updateAssignmentManager(
+      assignmentId,
+      body.managerAssignmentId,
+    );
   }
 
   @Patch(':assignmentId/end')

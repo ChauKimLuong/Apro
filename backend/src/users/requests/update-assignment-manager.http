@@ -1,0 +1,66 @@
+@baseUrl = http://localhost:3002
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@dungAssignmentId = 20000000-0000-4000-8000-000000000104
+@haAssignmentId = 20000000-0000-4000-8000-000000000105
+@haId = 10000000-0000-4000-8000-000000000105
+# Dùng sơ đồ Công ty A từ seed-provisioning.cjs. Các ca cuối giữ lại tuyến Hà báo cáo cho Dũng.
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### Bỏ quản lý trực tiếp của Hà - 200 ASSIGNMENT_MANAGER_UPDATED
+PATCH {{baseUrl}}/employee-assignments/{{haAssignmentId}}/manager
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "managerAssignmentId": null
+}
+
+### Gán Hà báo cáo cho Dũng - 200 ASSIGNMENT_MANAGER_UPDATED
+PATCH {{baseUrl}}/employee-assignments/{{haAssignmentId}}/manager
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "managerAssignmentId": "{{dungAssignmentId}}"
+}
+
+### Xem lại Hồ sơ Hà có quản lý trực tiếp là Dũng - 200
+GET {{baseUrl}}/employees/{{haId}}
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Thiếu trường quản lý - 400 VALIDATION_ERROR
+PATCH {{baseUrl}}/employee-assignments/{{haAssignmentId}}/manager
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{}
+
+### Hà tự quản lý phân công của mình - 409 ASSIGNMENT_SELF_MANAGER
+PATCH {{baseUrl}}/employee-assignments/{{haAssignmentId}}/manager
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "managerAssignmentId": "{{haAssignmentId}}"
+}
+
+### Gán Dũng báo cáo cho Hà tạo vòng - 409 ASSIGNMENT_MANAGER_CYCLE
+PATCH {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/manager
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "managerAssignmentId": "{{haAssignmentId}}"
+}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout

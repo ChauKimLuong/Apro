@@ -1,6 +1,10 @@
 const { hash } = require('bcrypt');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('../dist/generated/prisma/client.js');
+const {
+  prepareOrganizationExample,
+  seedOrganizationExample,
+} = require('./seed-organization-example.cjs');
 
 const accounts = [
   {
@@ -51,6 +55,7 @@ async function main() {
     })),
   );
   const [admin] = users;
+  const organizationExample = await prepareOrganizationExample(password);
   const effectiveFrom = new Date();
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString }),
@@ -137,10 +142,16 @@ async function main() {
           validFrom: effectiveFrom,
         },
       });
+      await seedOrganizationExample(
+        tx,
+        organizationExample,
+        role.id,
+        effectiveFrom,
+      );
     });
 
     console.log(
-      'Seed phân quyền hoàn tất cho admin@example.test và member@example.test.',
+      'Seed phân quyền và sơ đồ Công ty A hoàn tất. Tài khoản quản trị ví dụ: an@example.test.',
     );
   } finally {
     await prisma.$disconnect();

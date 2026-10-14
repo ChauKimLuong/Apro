@@ -145,6 +145,7 @@ export class UsersRepository {
             startedAt: true,
             endedAt: true,
             managerAssignmentId: true,
+            manager: { select: { userId: true } },
             organizationalUnit: {
               select: { id: true, name: true, status: true },
             },
@@ -160,7 +161,11 @@ export class UsersRepository {
     const excludedUsers = new Set([id]);
     const assignments = await Promise.all(
       employee.assignments.map(
-        async ({ managerAssignmentId, ...assignment }) => {
+        async ({
+          managerAssignmentId,
+          manager: directManager,
+          ...assignment
+        }) => {
           const manager = await findEffectiveManager(
             this.database,
             managerAssignmentId,
@@ -169,6 +174,8 @@ export class UsersRepository {
           );
           return {
             ...assignment,
+            managerAssignmentId,
+            managerUserId: directManager?.userId ?? null,
             canAct:
               assignment.organizationalUnit.status === 'ACTIVE' &&
               assignment.position.status === 'ACTIVE',
@@ -357,6 +364,87 @@ export class UsersRepository {
       return employee
         ? ({ kind: 'invalid-assignment' } as const)
         : ({ kind: 'user-not-found' } as const);
+    }
+  }
+
+  async updateAssignmentManager(
+    assignmentId: string,
+    managerAssignmentId: string | null,
+  ) {
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const now = new Date();
+          const assignment = await tx.employeeAssignment.findUnique({
+            where: { id: assignmentId },
+            select: { id: true, userId: true, startedAt: true, endedAt: true },
+          });
+
+          if (!assignment) return { kind: 'not-found' } as const;
+          if (
+            assignment.startedAt > now ||
+            (assignment.endedAt && assignment.endedAt <= now)
+          ) {
+            return { kind: 'assignment-not-active' } as const;
+          }
+
+          if (managerAssignmentId !== null) {
+            const linkFields = {
+              id: true,
+              userId: true,
+              managerAssignmentId: true,
+            } satisfies Prisma.EmployeeAssignmentSelect;
+
+            const manager = await tx.employeeAssignment.findUnique({
+              where: {
+                ...activeAssignmentWhere(now),
+                id: managerAssignmentId,
+                user: { status: 'ACTIVE' },
+                organizationalUnit: { status: 'ACTIVE' },
+                position: { status: 'ACTIVE' },
+              },
+              select: linkFields,
+            });
+
+            if (!manager) return { kind: 'invalid-manager' } as const;
+            if (manager.userId === assignment.userId) {
+              return { kind: 'self-manager' } as const;
+            }
+
+            const visited = new Set([assignment.id]);
+            let cursor: typeof manager | null = manager;
+
+            while (cursor) {
+              if (
+                visited.has(cursor.id) ||
+                cursor.userId === assignment.userId
+              ) {
+                return { kind: 'manager-cycle' } as const;
+              }
+
+              visited.add(cursor.id);
+              const nextId: string | null = cursor.managerAssignmentId;
+              cursor = nextId
+                ? await tx.employeeAssignment.findUnique({
+                    where: { id: nextId },
+                    select: linkFields,
+                  })
+                : null;
+            }
+          }
+
+          const updated = await tx.employeeAssignment.update({
+            where: { id: assignment.id },
+            data: { managerAssignmentId },
+            select: { id: true, managerAssignmentId: true },
+          });
+          return { kind: 'updated', assignment: updated } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (isAssignmentWriteConflict(error)) return { kind: 'changed' } as const;
+      throw error;
     }
   }
 

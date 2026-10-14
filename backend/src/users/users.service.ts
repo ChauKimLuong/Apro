@@ -199,6 +199,63 @@ export class UsersService {
     };
   }
 
+  async updateAssignmentManager(
+    assignmentId: string,
+    managerAssignmentId: string | null,
+  ) {
+    const result = await this.users.updateAssignmentManager(
+      assignmentId,
+      managerAssignmentId,
+    );
+
+    if (result.kind === 'updated') {
+      return {
+        code: 'ASSIGNMENT_MANAGER_UPDATED',
+        message: managerAssignmentId
+          ? 'Đã cập nhật quản lý trực tiếp.'
+          : 'Đã bỏ quản lý trực tiếp.',
+        data: result.assignment,
+      };
+    }
+
+    if (result.kind === 'not-found') {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'ASSIGNMENT_NOT_FOUND',
+        message: 'Không tìm thấy phân công trong hồ sơ nhân viên.',
+      });
+    }
+
+    if (result.kind === 'invalid-manager') {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'INVALID_MANAGER_ASSIGNMENT',
+        message: 'Vui lòng chọn phân công quản lý đang hiệu lực.',
+      });
+    }
+
+    const conflicts = {
+      'assignment-not-active': {
+        code: 'ASSIGNMENT_NOT_ACTIVE',
+        message: 'Phân công cần cập nhật chưa bắt đầu hoặc đã kết thúc.',
+      },
+      'self-manager': {
+        code: 'ASSIGNMENT_SELF_MANAGER',
+        message: 'Vui lòng chọn một nhân viên khác làm quản lý trực tiếp.',
+      },
+      'manager-cycle': {
+        code: 'ASSIGNMENT_MANAGER_CYCLE',
+        message: 'Lựa chọn này tạo vòng báo cáo. Vui lòng chọn quản lý khác.',
+      },
+      changed: {
+        code: 'ASSIGNMENT_CHANGED',
+        message: 'Phân công vừa thay đổi. Vui lòng tải lại hồ sơ.',
+      },
+    };
+
+    throw new ConflictException({ statusCode: 409, ...conflicts[result.kind] });
+  }
+
   async endConcurrentAssignment(assignmentId: string) {
     const result = await this.users.endConcurrentAssignment(assignmentId);
     if (result.kind === 'ended') {
