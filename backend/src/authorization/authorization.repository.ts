@@ -24,6 +24,55 @@ const roleAssignmentFields = {
   systemRole: { select: systemRoleFields },
 } satisfies Prisma.RoleAssignmentSelect;
 
+function activeGrantWhere(
+  userId: string,
+  actorAssignmentId: string,
+  code: PermissionCode,
+  now: Date,
+): Prisma.RoleAssignmentWhereInput {
+  return {
+    employeeAssignmentId: actorAssignmentId,
+    revokedAt: null,
+    validFrom: { lte: now },
+    OR: [{ validUntil: null }, { validUntil: { gt: now } }],
+    employeeAssignment: {
+      userId,
+      startedAt: { lte: now },
+      OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+      user: { status: 'ACTIVE' },
+      organizationalUnit: { status: 'ACTIVE' },
+      position: { status: 'ACTIVE' },
+    },
+    systemRole: {
+      isActive: true,
+      rolePermissions: { some: { permission: { code } } },
+    },
+  };
+}
+
+async function findUnitPath(
+  tx: Prisma.TransactionClient,
+  targetUnitId: string,
+): Promise<Set<string> | null> {
+  const path = new Set<string>();
+  let unitId: string | null = targetUnitId;
+
+  while (unitId) {
+    const unit: { id: string; parentId: string | null } | null =
+      await tx.organizationalUnit.findUnique({
+        where: { id: unitId },
+        select: { id: true, parentId: true },
+      });
+
+    if (!unit || path.has(unit.id)) return null;
+
+    path.add(unit.id);
+    unitId = unit.parentId;
+  }
+
+  return path;
+}
+
 @Injectable()
 export class AuthorizationRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -153,31 +202,48 @@ export class AuthorizationRepository {
     actorAssignmentId: string,
     code: PermissionCode,
   ): Promise<boolean> {
-    const now = new Date();
-
     const grant = await this.database.roleAssignment.findFirst({
       where: {
-        employeeAssignmentId: actorAssignmentId,
+        ...activeGrantWhere(userId, actorAssignmentId, code, new Date()),
         scopeType: 'GLOBAL',
-        revokedAt: null,
-        validFrom: { lte: now },
-        OR: [{ validUntil: null }, { validUntil: { gt: now } }],
-        employeeAssignment: {
-          userId,
-          startedAt: { lte: now },
-          OR: [{ endedAt: null }, { endedAt: { gt: now } }],
-          user: { status: 'ACTIVE' },
-          organizationalUnit: { status: 'ACTIVE' },
-          position: { status: 'ACTIVE' },
-        },
-        systemRole: {
-          isActive: true,
-          rolePermissions: { some: { permission: { code } } },
-        },
       },
       select: { id: true },
     });
 
     return grant !== null;
+  }
+
+  async hasPermissionForUnit(
+    userId: string,
+    actorAssignmentId: string,
+    code: PermissionCode,
+    targetUnitId: string,
+  ): Promise<boolean> {
+    const now = new Date();
+
+    return this.database.$transaction(
+      async (tx) => {
+        const grants = await tx.roleAssignment.findMany({
+          where: activeGrantWhere(userId, actorAssignmentId, code, now),
+          select: {
+            scopeType: true,
+            employeeAssignment: { select: { organizationalUnitId: true } },
+          },
+        });
+
+        if (grants.length === 0) return false;
+
+        const path = await findUnitPath(tx, targetUnitId);
+        if (!path) return false;
+
+        return grants.some(
+          (grant) =>
+            grant.scopeType === 'GLOBAL' ||
+            (grant.scopeType === 'ORGANIZATIONAL_UNIT' &&
+              path.has(grant.employeeAssignment.organizationalUnitId)),
+        );
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 }

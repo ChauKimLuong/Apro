@@ -1,15 +1,39 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { PermissionCode } from '../generated/prisma/client';
 import { AuthorizationRepository } from './authorization.repository';
 import type { CreateRoleAssignmentDto } from './dto/create-role-assignment.dto';
 
 @Injectable()
 export class AuthorizationService {
   constructor(private readonly authorization: AuthorizationRepository) {}
+
+  async assertPermissionForUnit(
+    userId: string,
+    actorAssignmentId: string,
+    code: PermissionCode,
+    targetUnitId: string,
+  ): Promise<void> {
+    const allowed = await this.authorization.hasPermissionForUnit(
+      userId,
+      actorAssignmentId,
+      code,
+      targetUnitId,
+    );
+
+    if (!allowed) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'MISSING_PERMISSION',
+        message: 'Bạn không có quyền thực hiện thao tác trong đơn vị này.',
+      });
+    }
+  }
 
   async listSystemRoles() {
     return { data: await this.authorization.listSystemRoles() };
