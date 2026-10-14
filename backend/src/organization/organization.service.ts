@@ -11,6 +11,7 @@ import type {
 import type { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import type { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import type { UpdateOrganizationPositionDto } from './dto/update-organization-position.dto';
+import type { ManagedPositionStatus } from './dto/update-organization-position-status.dto';
 import type { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { OrganizationRepository } from './organization.repository';
 
@@ -214,6 +215,42 @@ export class OrganizationService {
       message: 'Đã tạo chức danh.',
       data: position,
     };
+  }
+
+  async updatePositionStatus(id: string, status: ManagedPositionStatus) {
+    const result = await this.organization.updatePositionStatus(id, status);
+
+    switch (result.kind) {
+      case 'not-found':
+        throw new NotFoundException({
+          statusCode: 404,
+          code: 'ORGANIZATION_POSITION_NOT_FOUND',
+          message: 'Không tìm thấy chức danh.',
+        });
+      case 'assigned':
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'ORGANIZATION_POSITION_HAS_ASSIGNMENTS',
+          message:
+            'Chức danh còn phân công đang hiệu lực hoặc đã lên lịch. Vui lòng xử lý các phân công trước.',
+        });
+      case 'changed':
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'ORGANIZATION_POSITION_CHANGED',
+          message:
+            'Dữ liệu chức danh vừa thay đổi. Vui lòng tải lại và thử lại.',
+        });
+      case 'updated':
+        return {
+          code: 'ORGANIZATION_POSITION_STATUS_UPDATED',
+          message:
+            status === 'ACTIVE'
+              ? 'Chức danh đã được kích hoạt.'
+              : 'Chức danh đã ngừng hoạt động.',
+          data: result.position,
+        };
+    }
   }
 
   async updatePosition(id: string, dto: UpdateOrganizationPositionDto) {

@@ -16,6 +16,7 @@ import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import { UpdateOrganizationPositionDto } from './dto/update-organization-position.dto';
+import { UpdateOrganizationPositionStatusDto } from './dto/update-organization-position-status.dto';
 import { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { UpdateOrganizationUnitStatusDto } from './dto/update-organization-unit-status.dto';
 import { OrganizationService } from './organization.service';
@@ -100,5 +101,14 @@ export class OrganizationController {
     @Body() body: UpdateOrganizationPositionDto,
   ) {
     return this.organization.updatePosition(id, body);
+  }
+
+  @Patch('positions/:id/status')
+  @UseGuards(OrganizationManageGuard)
+  updatePositionStatus(
+    @Param('id', positionIdPipe) id: string,
+    @Body() body: UpdateOrganizationPositionStatusDto,
+  ) {
+    return this.organization.updatePositionStatus(id, body.status);
   }
 }
