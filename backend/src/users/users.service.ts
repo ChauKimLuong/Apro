@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { MailService } from '../mail/mail.service';
 import type { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
 import type { CreateEmployeeDto } from './dto/create-employee.dto';
+import type { CreatePrimaryAssignmentDto } from './dto/create-primary-assignment.dto';
 import type { TransferAssignmentDto } from './dto/transfer-assignment.dto';
 import { UsersRepository } from './users.repository';
 
@@ -66,6 +67,52 @@ export class UsersService {
     return { data: employee.assignments };
   }
 
+  async createPrimaryAssignment(dto: CreatePrimaryAssignmentDto) {
+    const result = await this.users.createPrimaryAssignment(dto);
+
+    if (result.kind === 'created') {
+      return {
+        code: 'PRIMARY_ASSIGNMENT_CREATED',
+        message: 'Đã gán phân công chính.',
+        data: result.assignment,
+      };
+    }
+
+    if (result.kind === 'user-not-found') {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy tài khoản nhân viên.',
+      });
+    }
+
+    if (result.kind === 'invalid-assignment') {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'INVALID_EMPLOYEE_ASSIGNMENT',
+        message: 'Vui lòng chọn đơn vị và chức danh đang hoạt động.',
+      });
+    }
+
+    const conflicts = {
+      'primary-exists': {
+        code: 'PRIMARY_ASSIGNMENT_EXISTS',
+        message: 'Nhân viên đã có hoặc đã được lên lịch phân công chính.',
+      },
+      'duplicate-assignment': {
+        code: 'PRIMARY_ASSIGNMENT_DUPLICATES_EXISTING',
+        message:
+          'Nhân viên đã có phân công chưa kết thúc tại đơn vị và chức danh này.',
+      },
+      changed: {
+        code: 'ASSIGNMENT_CHANGED',
+        message: 'Phân công vừa thay đổi. Vui lòng tải lại hồ sơ.',
+      },
+    };
+
+    throw new ConflictException({ statusCode: 409, ...conflicts[result.kind] });
+  }
+
   async createConcurrentAssignment(dto: CreateConcurrentAssignmentDto) {
     const startedAt = dto.startedAt ? new Date(dto.startedAt) : new Date();
     const endedAt = dto.endedAt ? new Date(dto.endedAt) : null;
@@ -96,6 +143,15 @@ export class UsersService {
       startedAt,
       endedAt,
     });
+
+    if (result.kind === 'primary-required') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'PRIMARY_ASSIGNMENT_REQUIRED',
+        message:
+          'Vui lòng gán phân công chính có hiệu lực trước khi thêm kiêm nhiệm.',
+      });
+    }
 
     if (result.kind === 'duplicates-primary') {
       throw new ConflictException({

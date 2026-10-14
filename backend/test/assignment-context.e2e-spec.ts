@@ -17,6 +17,7 @@ const cookie = 'apro_session=test-session';
 
 describe('Assignment context (e2e)', () => {
   let app: INestApplication<App>;
+  const transaction = jest.fn();
 
   beforeAll(async () => {
     const grants = [
@@ -33,6 +34,7 @@ describe('Assignment context (e2e)', () => {
       })
       .overrideProvider(DatabaseService)
       .useValue({
+        $transaction: transaction,
         roleAssignment: {
           findFirst: ({
             where,
@@ -143,6 +145,28 @@ describe('Assignment context (e2e)', () => {
           code: 'VALIDATION_ERROR',
           errors: [{ field: 'userId' }],
         }),
+      );
+  });
+
+  it('returns 409 when PostgreSQL reports a write conflict at primary assignment commit', async () => {
+    const conflict = new Error('TransactionWriteConflict', {
+      cause: { kind: 'TransactionWriteConflict', originalCode: '40001' },
+    });
+    conflict.name = 'DriverAdapterError';
+    transaction.mockRejectedValueOnce(conflict);
+
+    await request(app.getHttpServer())
+      .post('/employee-assignments/primary')
+      .set('Cookie', cookie)
+      .set(header, allowedAssignmentId)
+      .send({
+        userId,
+        organizationalUnitId: allowedAssignmentId,
+        positionId: unprivilegedAssignmentId,
+      })
+      .expect(409)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ code: 'ASSIGNMENT_CHANGED' }),
       );
   });
 });

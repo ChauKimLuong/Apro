@@ -31,11 +31,39 @@ const assignmentRelations = {
   position: { select: { id: true, name: true } },
 } satisfies Prisma.EmployeeAssignmentSelect;
 
+const createdAssignmentFields = {
+  ...assignmentRelations,
+  id: true,
+  userId: true,
+  type: true,
+  isPrimary: true,
+  startedAt: true,
+  endedAt: true,
+} satisfies Prisma.EmployeeAssignmentSelect;
+
 function activeAssignmentWhere(now: Date): Prisma.EmployeeAssignmentWhereInput {
   return {
     startedAt: { lte: now },
     OR: [{ endedAt: null }, { endedAt: { gt: now } }],
   };
+}
+
+function isAssignmentWriteConflict(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2034';
+  }
+
+  // The PostgreSQL adapter can report a serialization conflict at commit.
+  const cause =
+    error instanceof Error && error.name === 'DriverAdapterError'
+      ? error.cause
+      : undefined;
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    'kind' in cause &&
+    cause.kind === 'TransactionWriteConflict'
+  );
 }
 
 async function findEffectiveManager(
@@ -172,6 +200,77 @@ export class UsersRepository {
     });
   }
 
+  async createPrimaryAssignment(input: {
+    userId: string;
+    organizationalUnitId: string;
+    positionId: string;
+  }) {
+    const { userId, organizationalUnitId, positionId } = input;
+
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const employee = await tx.user.findUnique({
+            where: { id: userId },
+            select: { id: true },
+          });
+          if (!employee) return { kind: 'user-not-found' } as const;
+
+          const startedAt = new Date();
+          const overlap = await tx.employeeAssignment.findFirst({
+            where: {
+              userId,
+              OR: [{ endedAt: null }, { endedAt: { gt: startedAt } }],
+              AND: [
+                {
+                  OR: [
+                    { isPrimary: true },
+                    { organizationalUnitId, positionId },
+                  ],
+                },
+              ],
+            },
+            orderBy: { isPrimary: 'desc' },
+            select: { isPrimary: true },
+          });
+
+          if (overlap) {
+            return overlap.isPrimary
+              ? ({ kind: 'primary-exists' } as const)
+              : ({ kind: 'duplicate-assignment' } as const);
+          }
+
+          const assignment = await tx.employeeAssignment.create({
+            data: {
+              user: { connect: { id: userId } },
+              organizationalUnit: {
+                connect: { id: organizationalUnitId, status: 'ACTIVE' },
+              },
+              position: {
+                connect: { id: positionId, status: 'ACTIVE' },
+              },
+              type: 'OFFICIAL',
+              isPrimary: true,
+              startedAt,
+            },
+            select: createdAssignmentFields,
+          });
+
+          return { kind: 'created', assignment } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (isAssignmentWriteConflict(error)) return { kind: 'changed' } as const;
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (['P2003', 'P2018', 'P2025'].includes(error.code)) {
+          return { kind: 'invalid-assignment' } as const;
+        }
+      }
+      throw error;
+    }
+  }
+
   async createConcurrentAssignment(input: {
     userId: string;
     organizationalUnitId: string;
@@ -182,6 +281,25 @@ export class UsersRepository {
     try {
       return await this.database.$transaction(
         async (tx) => {
+          const employee = await tx.user.findUnique({
+            where: { id: input.userId },
+            select: {
+              assignments: {
+                where: {
+                  isPrimary: true,
+                  ...activeAssignmentWhere(input.startedAt),
+                },
+                take: 1,
+                select: { id: true },
+              },
+            },
+          });
+
+          if (!employee) return { kind: 'user-not-found' } as const;
+          if (employee.assignments.length === 0) {
+            return { kind: 'primary-required' } as const;
+          }
+
           const overlappingAssignment = await tx.employeeAssignment.findFirst({
             where: {
               userId: input.userId,
@@ -215,15 +333,7 @@ export class UsersRepository {
               startedAt: input.startedAt,
               endedAt: input.endedAt,
             },
-            select: {
-              ...assignmentRelations,
-              id: true,
-              userId: true,
-              type: true,
-              isPrimary: true,
-              startedAt: true,
-              endedAt: true,
-            },
+            select: createdAssignmentFields,
           });
 
           return { kind: 'created', assignment } as const;
@@ -231,12 +341,7 @@ export class UsersRepository {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      ) {
-        return { kind: 'changed' } as const;
-      }
+      if (isAssignmentWriteConflict(error)) return { kind: 'changed' } as const;
       if (
         !(error instanceof Prisma.PrismaClientKnownRequestError) ||
         !['P2003', 'P2018', 'P2025'].includes(error.code)
