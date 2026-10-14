@@ -1,13 +1,12 @@
 import {
-  BadRequestException,
   ForbiddenException,
   UnauthorizedException,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
-import { isUUID } from 'class-validator';
 import type { AuthenticatedRequest } from '../../auth/auth-session';
 import type { PermissionCode } from '../../generated/prisma/client';
+import { readActorAssignmentId } from '../assignment-context';
 import type { AuthorizationRepository } from '../authorization.repository';
 
 export abstract class GlobalPermissionGuard implements CanActivate {
@@ -28,16 +27,7 @@ export abstract class GlobalPermissionGuard implements CanActivate {
       });
     }
 
-    const selectedId = request.get('X-Employee-Assignment-Id');
-    if (!selectedId || !isUUID(selectedId, '4')) {
-      throw new BadRequestException({
-        statusCode: 400,
-        code: 'ASSIGNMENT_CONTEXT_REQUIRED',
-        message: 'Vui lòng chọn lại phân công đang thao tác.',
-      });
-    }
-
-    const actorAssignmentId = selectedId.toLowerCase();
+    const actorAssignmentId = readActorAssignmentId(request);
     const allowed = await this.authorization.hasGlobalPermission(
       request.authUser.id,
       actorAssignmentId,

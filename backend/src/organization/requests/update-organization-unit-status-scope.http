@@ -1,0 +1,58 @@
+@baseUrl = http://127.0.0.1:3003
+@quangAssignmentId = 20000000-0000-4000-8000-000000000103
+@technologyDivisionId = 30000000-0000-4000-8000-000000000102
+@itDepartmentId = 30000000-0000-4000-8000-000000000103
+@companyId = 30000000-0000-4000-8000-000000000101
+
+# Dùng PostgreSQL local và bật cookie jar. Cấp ORGANIZATION_MANAGE phạm vi
+# ORGANIZATIONAL_UNIT cho phân công Giám đốc Khối Công nghệ của Quang.
+# Chuẩn bị thêm một khối cùng cấp đang hoạt động và một phân công hết hiệu lực
+# của Quang tại Khối Công nghệ có lần cấp quyền tương ứng.
+# Body ACTIVE trên đơn vị đang hoạt động giúp kiểm tra quyền mà không đổi dữ liệu.
+
+### Đăng nhập Quang - 200
+# @prompt quangPassword Nhập mật khẩu hiện tại của quang@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "quang@example.test", "password": "{{quangPassword}}" }
+
+### Sửa đúng Khối Công nghệ - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{technologyDivisionId}}/status
+X-Employee-Assignment-Id: {{quangAssignmentId}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### Sửa Phòng Công nghệ thông tin trực thuộc - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{itDepartmentId}}/status
+X-Employee-Assignment-Id: {{quangAssignmentId}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### Sửa đơn vị cha Công ty A - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/organization/units/{{companyId}}/status
+X-Employee-Assignment-Id: {{quangAssignmentId}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### Sửa khối khác cùng cấp - 403 MISSING_PERMISSION
+# @prompt siblingUnitId Nhập ID khối khác thuộc Công ty A
+PATCH {{baseUrl}}/organization/units/{{siblingUnitId}}/status
+X-Employee-Assignment-Id: {{quangAssignmentId}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### Dùng phân công đã hết hiệu lực tại Khối Công nghệ - 403 MISSING_PERMISSION
+# @prompt expiredAssignmentId Nhập ID phân công đã hết hiệu lực của Quang
+PATCH {{baseUrl}}/organization/units/{{technologyDivisionId}}/status
+X-Employee-Assignment-Id: {{expiredAssignmentId}}
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### Đăng xuất Quang - 200
+POST {{baseUrl}}/auth/logout

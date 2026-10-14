@@ -218,32 +218,36 @@ export class AuthorizationRepository {
     actorAssignmentId: string,
     code: PermissionCode,
     targetUnitId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const now = new Date();
 
-    return this.database.$transaction(
-      async (tx) => {
-        const grants = await tx.roleAssignment.findMany({
-          where: activeGrantWhere(userId, actorAssignmentId, code, now),
-          select: {
-            scopeType: true,
-            employeeAssignment: { select: { organizationalUnitId: true } },
-          },
-        });
+    const check = async (client: Prisma.TransactionClient) => {
+      const grants = await client.roleAssignment.findMany({
+        where: activeGrantWhere(userId, actorAssignmentId, code, now),
+        select: {
+          scopeType: true,
+          employeeAssignment: { select: { organizationalUnitId: true } },
+        },
+      });
 
-        if (grants.length === 0) return false;
+      if (grants.some((grant) => grant.scopeType === 'GLOBAL')) return true;
+      if (grants.length === 0) return false;
 
-        const path = await findUnitPath(tx, targetUnitId);
-        if (!path) return false;
+      const path = await findUnitPath(client, targetUnitId);
+      if (!path) return false;
 
-        return grants.some(
-          (grant) =>
-            grant.scopeType === 'GLOBAL' ||
-            (grant.scopeType === 'ORGANIZATIONAL_UNIT' &&
-              path.has(grant.employeeAssignment.organizationalUnitId)),
-        );
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-    );
+      return grants.some(
+        (grant) =>
+          grant.scopeType === 'ORGANIZATIONAL_UNIT' &&
+          path.has(grant.employeeAssignment.organizationalUnitId),
+      );
+    };
+
+    if (tx) return check(tx);
+
+    return this.database.$transaction(check, {
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    });
   }
 }

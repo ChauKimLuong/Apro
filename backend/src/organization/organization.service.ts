@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AuthorizationService } from '../authorization/authorization.service';
 import type {
   OrganizationalUnitStatus,
   OrganizationalUnitType,
@@ -76,7 +77,10 @@ function buildOrganizationChart(units: ChartUnitRow[]): ChartUnit[] {
 
 @Injectable()
 export class OrganizationService {
-  constructor(private readonly organization: OrganizationRepository) {}
+  constructor(
+    private readonly organization: OrganizationRepository,
+    private readonly authorization: AuthorizationService,
+  ) {}
 
   async listUnits() {
     return { data: await this.organization.listUnits() };
@@ -120,8 +124,20 @@ export class OrganizationService {
     };
   }
 
-  async updateUnitStatus(id: string, status: OrganizationalUnitStatus) {
-    const result = await this.organization.updateUnitStatus(id, status);
+  async updateUnitStatus(
+    id: string,
+    status: OrganizationalUnitStatus,
+    actor: { userId: string; assignmentId: string },
+  ) {
+    const result = await this.organization.updateUnitStatus(id, status, (tx) =>
+      this.authorization.assertPermissionForUnit(
+        actor.userId,
+        actor.assignmentId,
+        'ORGANIZATION_MANAGE',
+        id,
+        tx,
+      ),
+    );
     if (result.kind === 'not-found' || result.kind === 'changed') {
       this.throwUnitWriteError(result);
     }

@@ -203,10 +203,16 @@ export class OrganizationRepository {
     }
   }
 
-  async updateUnitStatus(id: string, status: OrganizationalUnitStatus) {
+  async updateUnitStatus(
+    id: string,
+    status: OrganizationalUnitStatus,
+    authorize: (tx: Prisma.TransactionClient) => Promise<void>,
+  ) {
     try {
       return await this.database.$transaction(
         async (tx) => {
+          await authorize(tx);
+
           const current = await tx.organizationalUnit.findUnique({
             where: { id },
             select: {

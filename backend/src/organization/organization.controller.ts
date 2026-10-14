@@ -7,9 +7,12 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
+import { readActorAssignmentId } from '../authorization/assignment-context';
 import { OrganizationManageGuard } from '../authorization/guards/organization-manage.guard';
 import { OrganizationViewGuard } from '../authorization/guards/organization-view.guard';
 import { UserViewGuard } from '../authorization/guards/user-view.guard';
@@ -74,12 +77,15 @@ export class OrganizationController {
   }
 
   @Patch('units/:id/status')
-  @UseGuards(OrganizationManageGuard)
   updateUnitStatus(
+    @Req() request: AuthenticatedRequest,
     @Param('id', unitIdPipe) id: string,
     @Body() body: UpdateOrganizationUnitStatusDto,
   ) {
-    return this.organization.updateUnitStatus(id, body.status);
+    return this.organization.updateUnitStatus(id, body.status, {
+      userId: request.authUser.id,
+      assignmentId: readActorAssignmentId(request),
+    });
   }
 
   @Get('positions')
