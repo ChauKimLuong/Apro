@@ -352,6 +352,15 @@ export class UsersService {
       });
     }
 
+    if (result.kind === 'changed') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'EMPLOYEE_ASSIGNMENT_CHANGED',
+        message:
+          'Dữ liệu phân công vừa thay đổi. Vui lòng tải lại danh mục rồi thử lại.',
+      });
+    }
+
     if (result.kind === 'invalid-assignment') {
       throw new BadRequestException({
         statusCode: 400,

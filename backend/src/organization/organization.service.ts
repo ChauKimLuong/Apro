@@ -4,7 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { OrganizationalUnitType } from '../generated/prisma/client';
+import type {
+  OrganizationalUnitStatus,
+  OrganizationalUnitType,
+} from '../generated/prisma/client';
 import type { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import type { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { OrganizationRepository } from './organization.repository';
@@ -53,6 +56,45 @@ export class OrganizationService {
     return {
       code: 'ORGANIZATION_UNIT_UPDATED',
       message: 'Đã cập nhật đơn vị tổ chức.',
+      data: result.unit,
+    };
+  }
+
+  async updateUnitStatus(id: string, status: OrganizationalUnitStatus) {
+    const result = await this.organization.updateUnitStatus(id, status);
+    if (result.kind === 'not-found' || result.kind === 'changed') {
+      this.throwUnitWriteError(result);
+    }
+
+    if (result.kind !== 'updated') {
+      const conflicts = {
+        'parent-inactive': {
+          code: 'ORGANIZATION_UNIT_PARENT_INACTIVE',
+          message: 'Vui lòng kích hoạt đơn vị cha trước.',
+        },
+        'active-child': {
+          code: 'ORGANIZATION_UNIT_HAS_ACTIVE_CHILDREN',
+          message: 'Vui lòng xử lý các đơn vị con đang hoạt động trước.',
+        },
+        assigned: {
+          code: 'ORGANIZATION_UNIT_HAS_ASSIGNMENTS',
+          message:
+            'Vui lòng xử lý các phân công còn hiệu lực hoặc đã lên lịch trước.',
+        },
+      };
+      throw new ConflictException({
+        statusCode: 409,
+        ...conflicts[result.kind],
+      });
+    }
+
+    const messages = {
+      ACTIVE: 'Đơn vị đã hoạt động.',
+      INACTIVE: 'Đơn vị đã ngừng hoạt động.',
+    };
+    return {
+      code: 'ORGANIZATION_UNIT_STATUS_UPDATED',
+      message: messages[status],
       data: result.unit,
     };
   }

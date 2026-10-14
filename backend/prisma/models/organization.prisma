@@ -10,7 +10,6 @@ enum OrganizationalUnitType {
 enum OrganizationalUnitStatus {
   ACTIVE
   INACTIVE
-  LOCKED
 
   @@map("organizational_unit_status")
 }

@@ -14,6 +14,7 @@ import { OrganizationManageGuard } from '../authorization/guards/organization-ma
 import { OrganizationViewGuard } from '../authorization/guards/organization-view.guard';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
+import { UpdateOrganizationUnitStatusDto } from './dto/update-organization-unit-status.dto';
 import { OrganizationService } from './organization.service';
 
 const unitIdPipe = new ParseUUIDPipe({
@@ -50,6 +51,15 @@ export class OrganizationController {
     @Body() body: UpdateOrganizationUnitDto,
   ) {
     return this.organization.updateUnit(id, body);
+  }
+
+  @Patch('units/:id/status')
+  @UseGuards(OrganizationManageGuard)
+  updateUnitStatus(
+    @Param('id', unitIdPipe) id: string,
+    @Body() body: UpdateOrganizationUnitStatusDto,
+  ) {
+    return this.organization.updateUnitStatus(id, body.status);
   }
 
   @Get('positions')

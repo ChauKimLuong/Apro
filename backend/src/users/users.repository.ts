@@ -578,44 +578,51 @@ export class UsersRepository {
 
   async createEmployee(input: EmployeeAccountInput) {
     try {
-      const user = await this.database.user.create({
-        data: {
-          fullName: input.fullName,
-          email: input.email,
-          passwordHash: input.passwordHash,
-          temporaryPasswordExpiresAt: input.temporaryPasswordExpiresAt,
-          status: 'ACTIVE',
-          assignments: {
-            create: {
-              type: 'OFFICIAL',
-              isPrimary: true,
-              startedAt: input.startedAt,
-              organizationalUnit: {
-                connect: { id: input.organizationalUnitId, status: 'ACTIVE' },
-              },
-              position: {
-                connect: { id: input.positionId, status: 'ACTIVE' },
+      const user = await this.database.$transaction(
+        (tx) =>
+          tx.user.create({
+            data: {
+              fullName: input.fullName,
+              email: input.email,
+              passwordHash: input.passwordHash,
+              temporaryPasswordExpiresAt: input.temporaryPasswordExpiresAt,
+              status: 'ACTIVE',
+              assignments: {
+                create: {
+                  type: 'OFFICIAL',
+                  isPrimary: true,
+                  startedAt: input.startedAt,
+                  organizationalUnit: {
+                    connect: {
+                      id: input.organizationalUnitId,
+                      status: 'ACTIVE',
+                    },
+                  },
+                  position: {
+                    connect: { id: input.positionId, status: 'ACTIVE' },
+                  },
+                },
               },
             },
-          },
-        },
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          status: true,
-          assignments: {
             select: {
               id: true,
-              organizationalUnitId: true,
-              positionId: true,
-              type: true,
-              isPrimary: true,
-              startedAt: true,
+              fullName: true,
+              email: true,
+              status: true,
+              assignments: {
+                select: {
+                  id: true,
+                  organizationalUnitId: true,
+                  positionId: true,
+                  type: true,
+                  isPrimary: true,
+                  startedAt: true,
+                },
+              },
             },
-          },
-        },
-      });
+          }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
 
       return { kind: 'created', user } as const;
     } catch (error) {
@@ -625,6 +632,9 @@ export class UsersRepository {
 
       if (error.code === 'P2002') {
         return { kind: 'email-taken' } as const;
+      }
+      if (error.code === 'P2034') {
+        return { kind: 'changed' } as const;
       }
 
       if (error.code === 'P2025' || error.code === 'P2018') {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
   Prisma,
+  type OrganizationalUnitStatus,
   type OrganizationalUnitType,
 } from '../generated/prisma/client';
 
@@ -151,6 +152,65 @@ export class OrganizationRepository {
             select: unitFields,
           });
           return { kind: 'updated', unit } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        return { kind: 'changed' } as const;
+      }
+      throw error;
+    }
+  }
+
+  async updateUnitStatus(id: string, status: OrganizationalUnitStatus) {
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const current = await tx.organizationalUnit.findUnique({
+            where: { id },
+            select: {
+              ...unitFields,
+              parent: { select: { status: true } },
+            },
+          });
+          if (!current) return { kind: 'not-found' } as const;
+
+          const { parent, ...unit } = current;
+          if (unit.status === status) {
+            return { kind: 'updated', unit } as const;
+          }
+          if (status === 'ACTIVE' && parent && parent.status !== 'ACTIVE') {
+            return { kind: 'parent-inactive' } as const;
+          }
+
+          if (status === 'INACTIVE') {
+            const activeChild = await tx.organizationalUnit.findFirst({
+              where: { parentId: unit.id, status: 'ACTIVE' },
+              select: { id: true },
+            });
+            if (activeChild) return { kind: 'active-child' } as const;
+
+            const now = new Date();
+            const assignment = await tx.employeeAssignment.findFirst({
+              where: {
+                organizationalUnitId: unit.id,
+                OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+              },
+              select: { id: true },
+            });
+            if (assignment) return { kind: 'assigned' } as const;
+          }
+
+          const updated = await tx.organizationalUnit.update({
+            where: { id: unit.id },
+            data: { status },
+            select: unitFields,
+          });
+          return { kind: 'updated', unit: updated } as const;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );

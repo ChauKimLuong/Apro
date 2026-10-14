@@ -1,0 +1,135 @@
+@baseUrl = http://localhost:3002
+@existingUnitId = 30000000-0000-4000-8000-000000000001
+@positionId = 40000000-0000-4000-8000-000000000001
+# Chạy tuần tự trên database thử nghiệm và bật cookie jar trong REST Client.
+# Đổi email nếu chạy lại trên cùng database. Ca cấp tài khoản gửi thư thử nghiệm qua Mailpit.
+@employeeEmail = unit-status-employee@example.test
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+PATCH {{baseUrl}}/organization/units/{{existingUnitId}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/organization/units/{{existingUnitId}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Tạo công ty trống - 201 ORGANIZATION_UNIT_CREATED
+# @name createEmptyUnit
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{ "name": "Công ty thử đổi trạng thái", "type": "COMPANY" }
+
+### Ngừng hoạt động đơn vị trống - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Gửi lại trạng thái hiện tại - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Kích hoạt lại đơn vị trống - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### LOCKED không còn là trạng thái đơn vị - 400 VALIDATION_ERROR
+PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "LOCKED" }
+
+### Tạo phòng ban đang hoạt động dưới công ty thử - 201 ORGANIZATION_UNIT_CREATED
+# @name createChildUnit
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Phòng thử đổi trạng thái",
+  "type": "DEPARTMENT",
+  "parentId": "{{createEmptyUnit.response.body.$.data.id}}"
+}
+
+### Ngừng đơn vị còn đơn vị con hoạt động - 409 ORGANIZATION_UNIT_HAS_ACTIVE_CHILDREN
+PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Ngừng hoạt động đơn vị con - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createChildUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Ngừng đơn vị cha sau khi xử lý đơn vị con - 200 ORGANIZATION_UNIT_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createEmptyUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Kích hoạt đơn vị con khi cha ngừng hoạt động - 409 ORGANIZATION_UNIT_PARENT_INACTIVE
+PATCH {{baseUrl}}/organization/units/{{createChildUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "ACTIVE" }
+
+### Tạo đơn vị để cấp tài khoản thử - 201 ORGANIZATION_UNIT_CREATED
+# @name createAssignedUnit
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{ "name": "Đơn vị có phân công thử nghiệm", "type": "DEPARTMENT" }
+
+### Cấp tài khoản với phân công - 201 EMPLOYEE_ACCOUNT_CREATED
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "fullName": "Nhân viên thử trạng thái đơn vị",
+  "email": "{{employeeEmail}}",
+  "organizationalUnitId": "{{createAssignedUnit.response.body.$.data.id}}",
+  "positionId": "{{positionId}}"
+}
+
+### Ngừng đơn vị còn phân công - 409 ORGANIZATION_UNIT_HAS_ASSIGNMENTS
+PATCH {{baseUrl}}/organization/units/{{createAssignedUnit.response.body.$.data.id}}/status
+Content-Type: application/json
+
+{ "status": "INACTIVE" }
+
+### Đọc lại trạng thái từ danh mục - 200
+GET {{baseUrl}}/organization/units
+
+### Đăng xuất admin - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout
