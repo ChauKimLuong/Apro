@@ -1,0 +1,186 @@
+@baseUrl = http://localhost:3002
+# Chạy tuần tự trên database thử nghiệm. Luồng chuyển sẽ kết thúc phân công cũ.
+@employeeId = 10000000-0000-4000-8000-000000000002
+@primaryAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminId = 10000000-0000-4000-8000-000000000001
+@adminAssignmentId = 20000000-0000-4000-8000-000000000001
+@unitId = 30000000-0000-4000-8000-000000000001
+@oldPositionId = 40000000-0000-4000-8000-000000000001
+@newPositionId = 40000000-0000-4000-8000-000000000002
+# Điền ID chức danh thứ ba và đơn vị khác đang hoạt động từ GET /users/assignment-options.
+@anotherPositionId = 40000000-0000-4000-8000-000000000003
+@anotherUnitId = 30000000-0000-4000-8000-000000000002
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Phân công thuộc hồ sơ khác - 404 ASSIGNMENT_NOT_FOUND
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{adminAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Đơn vị và chức danh giữ nguyên - 409 ASSIGNMENT_UNCHANGED
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{oldPositionId}}"
+}
+
+### Phân công cũ đang cấp quyền - 409 ASSIGNMENT_HAS_DEPENDENCIES
+PATCH {{baseUrl}}/users/{{adminId}}/assignments/{{adminAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Điều chuyển phân công chính - 200 PRIMARY_ASSIGNMENT_TRANSFERRED
+# @name movePrimary
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Hồ sơ hiển thị phân công mới - 200
+GET {{baseUrl}}/users/{{employeeId}}
+
+### Lịch sử có phân công chính cũ - 200
+GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+
+### Gửi lại từ hồ sơ cũ - 409 ASSIGNMENT_CHANGED
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Điều chuyển vị trí quản lý và chọn người tạm quyền - 200 PRIMARY_ASSIGNMENT_TRANSFERRED
+# Dùng hồ sơ thử có phân công quản lý đang hiệu lực và chọn người tạm quyền chưa giữ vị trí đó.
+# @prompt managerUserId ID nhân viên quản lý sắp chuyển
+# @prompt managerAssignmentId ID phân công chính hiện tại của quản lý
+# @prompt actingUserId ID người tạm quyền
+# @prompt actingUntil Thời điểm kết thúc ISO 8601 có múi giờ
+PATCH {{baseUrl}}/users/{{managerUserId}}/assignments/{{managerAssignmentId}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{oldPositionId}}",
+  "actingUserId": "{{actingUserId}}",
+  "actingUntil": "{{actingUntil}}"
+}
+
+### Hồ sơ người tạm quyền có phân công TEMPORARY - 200
+# @prompt actingUserId Nhập ID người tạm quyền ở ca trước
+GET {{baseUrl}}/users/{{actingUserId}}
+
+### Tạo phân công kiêm nhiệm có hạn để chuyển - 201 CONCURRENT_ASSIGNMENT_CREATED
+# @name createConcurrentToMove
+POST {{baseUrl}}/users/{{employeeId}}/assignments
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{oldPositionId}}",
+  "endedAt": "2099-12-01T08:00:00+07:00"
+}
+
+### Tạo kiêm nhiệm khác để kiểm tra trùng - 201 CONCURRENT_ASSIGNMENT_CREATED
+POST {{baseUrl}}/users/{{employeeId}}/assignments
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{anotherPositionId}}"
+}
+
+### Chuyển chính sang vị trí đã kiêm nhiệm - 409 ASSIGNMENT_OVERLAP
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{movePrimary.response.body.$.data.assignment.id}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{oldPositionId}}"
+}
+
+### Chuyển kiêm nhiệm sang vị trí của phân công chính - 409 ASSIGNMENT_OVERLAP
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createConcurrentToMove.response.body.$.data.id}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{newPositionId}}"
+}
+
+### Chuyển kiêm nhiệm trùng một kiêm nhiệm khác - 409 ASSIGNMENT_OVERLAP
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createConcurrentToMove.response.body.$.data.id}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{anotherPositionId}}"
+}
+
+### Giữ chức danh và chuyển kiêm nhiệm sang đơn vị khác - 200 CONCURRENT_ASSIGNMENT_TRANSFERRED
+# Kỳ vọng data.assignment giữ type CONCURRENT, isPrimary false và thời điểm kết thúc.
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createConcurrentToMove.response.body.$.data.id}}/transfer
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{anotherUnitId}}",
+  "positionId": "{{oldPositionId}}"
+}
+
+### Hồ sơ vẫn có phân công chính sau khi chuyển kiêm nhiệm - 200
+GET {{baseUrl}}/users/{{employeeId}}
+
+### Đăng xuất admin - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout

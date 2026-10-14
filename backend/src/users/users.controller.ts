@@ -17,6 +17,7 @@ import { UserUpdateGuard } from '../authorization/guards/user-update.guard';
 import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { TransferAssignmentDto } from './dto/transfer-assignment.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UsersService } from './users.service';
 
@@ -94,6 +95,16 @@ export class UsersController {
     @Param('assignmentId', assignmentIdPipe) assignmentId: string,
   ) {
     return this.users.endConcurrentAssignment(userId, assignmentId);
+  }
+
+  @Patch(':userId/assignments/:assignmentId/transfer')
+  @UseGuards(UserUpdateGuard)
+  transferAssignment(
+    @Param('userId', userIdPipe) userId: string,
+    @Param('assignmentId', assignmentIdPipe) assignmentId: string,
+    @Body() body: TransferAssignmentDto,
+  ) {
+    return this.users.transferAssignment(userId, assignmentId, body);
   }
 
   @Patch(':id/status')
