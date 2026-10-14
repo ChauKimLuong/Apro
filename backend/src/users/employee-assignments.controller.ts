@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
+import { AuthorizationService } from '../authorization/authorization.service';
+import { RoleAssignGuard } from '../authorization/guards/role-assign.guard';
 import { UserUpdateGuard } from '../authorization/guards/user-update.guard';
 import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
@@ -23,7 +25,10 @@ import { UsersService } from './users.service';
 @Controller('employee-assignments')
 @UseGuards(AuthSessionGuard)
 export class EmployeeAssignmentsController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly authorization: AuthorizationService,
+  ) {}
 
   @Get('me')
   getMyAssignments(@Req() request: AuthenticatedRequest) {
@@ -40,6 +45,15 @@ export class EmployeeAssignmentsController {
   @UseGuards(UserViewGuard)
   getHistory(@Query('userId', userIdPipe) userId: string) {
     return this.users.getAssignmentHistory(userId);
+  }
+
+  @Get(':employeeAssignmentId/role-assignments')
+  @UseGuards(RoleAssignGuard)
+  listRoleAssignments(
+    @Param('employeeAssignmentId', assignmentIdPipe)
+    employeeAssignmentId: string,
+  ) {
+    return this.authorization.listRoleAssignments(employeeAssignmentId);
   }
 
   @Post('primary')

@@ -1,0 +1,57 @@
+@baseUrl = http://localhost:3003
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@dungAssignmentId = 20000000-0000-4000-8000-000000000104
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+@missingAssignmentId = 70000000-0000-4000-8000-000000000001
+# Dùng seed Công ty A. Dũng chưa có lần cấp nào trong dữ liệu mẫu.
+
+### Chưa đăng nhập - 401
+# @no-cookie-jar
+GET {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
+}
+
+### Chi thiếu ROLE_ASSIGN - 403 MISSING_PERMISSION
+GET {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{chiAssignmentId}}
+
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### An xem phân công của Dũng - 200, data: []
+GET {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### An xem phân công của mình - 200, có lần cấp SYSTEM_ADMIN
+GET {{baseUrl}}/employee-assignments/{{anAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### ID phân công sai định dạng - 400 INVALID_ASSIGNMENT_ID
+GET {{baseUrl}}/employee-assignments/sai-id/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Phân công không tồn tại - 404 ASSIGNMENT_NOT_FOUND
+GET {{baseUrl}}/employee-assignments/{{missingAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout

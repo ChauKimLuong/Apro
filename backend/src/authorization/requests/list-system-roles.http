@@ -1,0 +1,43 @@
+@baseUrl = http://localhost:3003
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+# Dùng seed Công ty A và chạy seed-provisioning.cjs --permissions-only nếu cần bổ sung ROLE_ASSIGN.
+
+### Chưa đăng nhập - 401
+# @no-cookie-jar
+GET {{baseUrl}}/system-roles
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
+}
+
+### Chi thiếu ROLE_ASSIGN - 403 MISSING_PERMISSION
+GET {{baseUrl}}/system-roles
+X-Employee-Assignment-Id: {{chiAssignmentId}}
+
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### An xem danh mục - 200, có SYSTEM_ADMIN
+GET {{baseUrl}}/system-roles
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout

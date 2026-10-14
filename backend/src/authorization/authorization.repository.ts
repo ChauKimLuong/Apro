@@ -1,10 +1,44 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import type { PermissionCode } from '../generated/prisma/client';
+import type { PermissionCode, Prisma } from '../generated/prisma/client';
+
+const systemRoleFields = {
+  id: true,
+  code: true,
+  name: true,
+  description: true,
+  isActive: true,
+} satisfies Prisma.SystemRoleSelect;
 
 @Injectable()
 export class AuthorizationRepository {
   constructor(private readonly database: DatabaseService) {}
+
+  listSystemRoles() {
+    return this.database.systemRole.findMany({
+      select: systemRoleFields,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  findRoleAssignments(employeeAssignmentId: string) {
+    return this.database.employeeAssignment.findUnique({
+      where: { id: employeeAssignmentId },
+      select: {
+        roleAssignments: {
+          orderBy: [{ validFrom: 'desc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            scopeType: true,
+            validFrom: true,
+            validUntil: true,
+            revokedAt: true,
+            systemRole: { select: systemRoleFields },
+          },
+        },
+      },
+    });
+  }
 
   async hasGlobalPermission(
     userId: string,
