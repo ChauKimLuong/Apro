@@ -126,6 +126,28 @@ export class AuthorizationRepository {
     }
   }
 
+  async revokeRoleAssignment(
+    employeeAssignmentId: string,
+    roleAssignmentId: string,
+  ) {
+    const where = { id: roleAssignmentId, employeeAssignmentId };
+
+    return this.database.$transaction(
+      async (tx) => {
+        await tx.roleAssignment.updateMany({
+          where: { ...where, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+
+        return tx.roleAssignment.findUnique({
+          where,
+          select: roleAssignmentFields,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
+  }
+
   async hasGlobalPermission(
     userId: string,
     actorAssignmentId: string,

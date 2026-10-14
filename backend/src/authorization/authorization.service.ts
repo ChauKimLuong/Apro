@@ -100,4 +100,28 @@ export class AuthorizationService {
         });
     }
   }
+
+  async revokeRoleAssignment(
+    employeeAssignmentId: string,
+    roleAssignmentId: string,
+  ) {
+    const grant = await this.authorization.revokeRoleAssignment(
+      employeeAssignmentId,
+      roleAssignmentId,
+    );
+
+    if (!grant) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'ROLE_ASSIGNMENT_NOT_FOUND',
+        message: 'Không tìm thấy lần cấp vai trò trong phân công này.',
+      });
+    }
+
+    return {
+      code: 'ROLE_ASSIGNMENT_REVOKED',
+      message: 'Vai trò đã được thu hồi.',
+      data: grant,
+    };
+  }
 }

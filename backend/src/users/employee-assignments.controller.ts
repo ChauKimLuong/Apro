@@ -20,7 +20,11 @@ import { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignmen
 import { CreatePrimaryAssignmentDto } from './dto/create-primary-assignment.dto';
 import { TransferAssignmentDto } from './dto/transfer-assignment.dto';
 import { UpdateAssignmentManagerDto } from './dto/update-assignment-manager.dto';
-import { assignmentIdPipe, userIdPipe } from './pipes/resource-id.pipes';
+import {
+  assignmentIdPipe,
+  roleAssignmentIdPipe,
+  userIdPipe,
+} from './pipes/resource-id.pipes';
 import { UsersService } from './users.service';
 
 @Controller('employee-assignments')
@@ -65,6 +69,20 @@ export class EmployeeAssignmentsController {
     @Body() body: CreateRoleAssignmentDto,
   ) {
     return this.authorization.createRoleAssignment(employeeAssignmentId, body);
+  }
+
+  @Patch(':employeeAssignmentId/role-assignments/:roleAssignmentId/revoke')
+  @UseGuards(RoleAssignGuard)
+  revokeRoleAssignment(
+    @Param('employeeAssignmentId', assignmentIdPipe)
+    employeeAssignmentId: string,
+    @Param('roleAssignmentId', roleAssignmentIdPipe)
+    roleAssignmentId: string,
+  ) {
+    return this.authorization.revokeRoleAssignment(
+      employeeAssignmentId,
+      roleAssignmentId,
+    );
   }
 
   @Post('primary')

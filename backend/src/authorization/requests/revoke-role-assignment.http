@@ -1,0 +1,92 @@
+@baseUrl = http://localhost:3003
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@dungAssignmentId = 20000000-0000-4000-8000-000000000104
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+# Chạy tuần tự trên DB kiểm thử đã seed Công ty A.
+# Tạo lần cấp theo phạm vi đơn vị cho Dũng để kiểm thử thu hồi.
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### Xem danh mục và chọn ID vai trò - 200
+GET {{baseUrl}}/system-roles
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Tạo lần cấp cho Dũng - 201 ROLE_ASSIGNMENT_CREATED
+# @name createGrantToRevoke
+# @prompt systemRoleId Nhập ID vai trò đang hoạt động từ danh mục
+POST {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "systemRoleId": "{{systemRoleId}}",
+  "scopeType": "ORGANIZATIONAL_UNIT"
+}
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+PATCH {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments/{{createGrantToRevoke.response.body.$.data.id}}/revoke
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
+}
+
+### Chi thiếu ROLE_ASSIGN - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments/{{createGrantToRevoke.response.body.$.data.id}}/revoke
+X-Employee-Assignment-Id: {{chiAssignmentId}}
+
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập lại An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### Ghép ID phân công Chi với lần cấp của Dũng - 404 ROLE_ASSIGNMENT_NOT_FOUND
+PATCH {{baseUrl}}/employee-assignments/{{chiAssignmentId}}/role-assignments/{{createGrantToRevoke.response.body.$.data.id}}/revoke
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### ID lần cấp sai định dạng - 400 INVALID_ROLE_ASSIGNMENT_ID
+PATCH {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments/sai-id/revoke
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### An thu hồi lần cấp của Dũng - 200 ROLE_ASSIGNMENT_REVOKED
+# @name revokeGrant
+PATCH {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments/{{createGrantToRevoke.response.body.$.data.id}}/revoke
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Gửi lại yêu cầu - 200 ROLE_ASSIGNMENT_REVOKED
+# So sánh data.revokedAt với kết quả revokeGrant, hai mốc phải giống nhau.
+PATCH {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments/{{createGrantToRevoke.response.body.$.data.id}}/revoke
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Lần cấp vẫn còn trong lịch sử và có revokedAt - 200
+GET {{baseUrl}}/employee-assignments/{{dungAssignmentId}}/role-assignments
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout
