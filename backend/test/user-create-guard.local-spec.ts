@@ -77,7 +77,9 @@ describe('USER_CREATE guard (local e2e)', () => {
 
     try {
       await agent.post('/auth/login').send({ email, password }).expect(200);
-      const assignments = await agent.get('/users/me/assignments').expect(200);
+      const assignments = await agent
+        .get('/employee-assignments/me')
+        .expect(200);
       const { data } = assignments.body as {
         data: Array<{ id: string; isPrimary: boolean; canAct: boolean }>;
       };

@@ -4,7 +4,7 @@
 
 ### Xem danh sách khi chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
-GET {{baseUrl}}/users
+GET {{baseUrl}}/employees
 
 ### Đăng nhập member - 200
 # @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
@@ -17,7 +17,7 @@ Content-Type: application/json
 }
 
 ### Member thiếu USER_VIEW - 403 MISSING_PERMISSION
-GET {{baseUrl}}/users
+GET {{baseUrl}}/employees
 X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng nhập admin - 200
@@ -32,7 +32,7 @@ Content-Type: application/json
 
 ### Admin xem danh sách - 200
 # Để xem tài khoản vừa cấp, chạy ca POST trong create-employee.http trước.
-GET {{baseUrl}}/users
+GET {{baseUrl}}/employees
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất phiên vừa dùng - 200

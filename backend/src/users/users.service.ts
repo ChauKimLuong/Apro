@@ -66,10 +66,7 @@ export class UsersService {
     return { data: employee.assignments };
   }
 
-  async createConcurrentAssignment(
-    userId: string,
-    dto: CreateConcurrentAssignmentDto,
-  ) {
+  async createConcurrentAssignment(dto: CreateConcurrentAssignmentDto) {
     const startedAt = dto.startedAt ? new Date(dto.startedAt) : new Date();
     const endedAt = dto.endedAt ? new Date(dto.endedAt) : null;
 
@@ -93,7 +90,7 @@ export class UsersService {
     }
 
     const result = await this.users.createConcurrentAssignment({
-      userId,
+      userId: dto.userId,
       organizationalUnitId: dto.organizationalUnitId,
       positionId: dto.positionId,
       startedAt,
@@ -146,11 +143,8 @@ export class UsersService {
     };
   }
 
-  async endConcurrentAssignment(userId: string, assignmentId: string) {
-    const result = await this.users.endConcurrentAssignment(
-      userId,
-      assignmentId,
-    );
+  async endConcurrentAssignment(assignmentId: string) {
+    const result = await this.users.endConcurrentAssignment(assignmentId);
     if (result.kind === 'ended') {
       return {
         code: 'CONCURRENT_ASSIGNMENT_ENDED',
@@ -184,11 +178,7 @@ export class UsersService {
     throw new ConflictException({ statusCode: 409, ...conflicts[result.kind] });
   }
 
-  async transferAssignment(
-    userId: string,
-    assignmentId: string,
-    dto: TransferAssignmentDto,
-  ) {
+  async transferAssignment(assignmentId: string, dto: TransferAssignmentDto) {
     let acting: { userId: string; endsAt: Date } | undefined;
     if (dto.actingUserId != null || dto.actingUntil != null) {
       const endsAt = dto.actingUntil ? new Date(dto.actingUntil) : undefined;
@@ -203,7 +193,6 @@ export class UsersService {
     }
 
     const result = await this.users.transferAssignment({
-      userId,
       assignmentId,
       organizationalUnitId: dto.organizationalUnitId,
       positionId: dto.positionId,

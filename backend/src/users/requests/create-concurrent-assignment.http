@@ -4,7 +4,7 @@
 @employeeId = 10000000-0000-4000-8000-000000000002
 @missingEmployeeId = 70000000-0000-4000-8000-000000000003
 # Các ID mặc định lấy từ seed. Ca 201 giữ cùng đơn vị và chọn chức danh Phụ trách kho.
-# Khi đổi nhân viên test, lấy cặp ID chính từ GET /users/:id và chọn cặp kiêm nhiệm từ assignment-options.
+# Khi đổi nhân viên test, lấy cặp ID chính từ GET /employees/:employeeId và chọn cặp kiêm nhiệm từ GET /employee-assignments/options.
 @primaryUnitId = 30000000-0000-4000-8000-000000000001
 @primaryPositionId = 40000000-0000-4000-8000-000000000001
 @unitId = 30000000-0000-4000-8000-000000000001
@@ -12,10 +12,11 @@
 
 ### Chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"
 }
@@ -31,11 +32,12 @@ Content-Type: application/json
 }
 
 ### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"
 }
@@ -51,39 +53,42 @@ Content-Type: application/json
 }
 
 ### Xem đơn vị và chức danh đang hoạt động - 200
-GET {{baseUrl}}/users/assignment-options
+GET {{baseUrl}}/employee-assignments/options
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Trùng đơn vị, chức danh chính và chồng thời gian - 409 ASSIGNMENT_DUPLICATES_PRIMARY
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{primaryUnitId}}",
   "positionId": "{{primaryPositionId}}"
 }
 
 ### Thêm kiêm nhiệm có hiệu lực ngay - 201 CONCURRENT_ASSIGNMENT_CREATED
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"
 }
 
 ### Xem lại hồ sơ và phân công mới - 200
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Lên lịch phân công trong tương lai - 201 CONCURRENT_ASSIGNMENT_CREATED
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}",
   "startedAt": "2099-12-01T08:00:00+07:00",
@@ -91,11 +96,12 @@ Content-Type: application/json
 }
 
 ### Thời gian kết thúc bằng lúc bắt đầu - 400 INVALID_ASSIGNMENT_PERIOD
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}",
   "startedAt": "2099-12-01T08:00:00+07:00",
@@ -103,11 +109,12 @@ Content-Type: application/json
 }
 
 ### Tài khoản không tồn tại - 404 USER_NOT_FOUND
-POST {{baseUrl}}/users/{{missingEmployeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{missingEmployeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{positionId}}"
 }

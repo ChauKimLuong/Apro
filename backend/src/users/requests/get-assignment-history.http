@@ -10,7 +10,7 @@
 
 ### Chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
-GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId={{employeeId}}
 
 ### Đăng nhập member - 200
 # @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
@@ -23,7 +23,7 @@ Content-Type: application/json
 }
 
 ### Member thiếu USER_VIEW - 403 MISSING_PERMISSION
-GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId={{employeeId}}
 X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng nhập admin - 200
@@ -37,46 +37,47 @@ Content-Type: application/json
 }
 
 ### ID sai định dạng - 400 INVALID_USER_ID
-GET {{baseUrl}}/users/khong-hop-le/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId=khong-hop-le
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Hồ sơ không tồn tại - 404 USER_NOT_FOUND
-GET {{baseUrl}}/users/{{missingEmployeeId}}/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId={{missingEmployeeId}}
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Tài khoản chưa có lịch sử - 200
 # Mặc định admin vừa seed chỉ có phân công chính đang hiệu lực. Kỳ vọng data: [].
-GET {{baseUrl}}/users/{{emptyHistoryEmployeeId}}/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId={{emptyHistoryEmployeeId}}
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Tạo kiêm nhiệm Phụ trách kho để test - 201 CONCURRENT_ASSIGNMENT_CREATED
 # @name createWarehouseForHistory
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{warehousePositionId}}"
 }
 
 ### Kiêm nhiệm đang hiệu lực chưa có trong lịch sử - 200
 # data chưa chứa ID vừa tạo.
-GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId={{employeeId}}
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Kết thúc kiêm nhiệm vừa tạo - 200 CONCURRENT_ASSIGNMENT_ENDED
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createWarehouseForHistory.response.body.$.data.id}}/end
+PATCH {{baseUrl}}/employee-assignments/{{createWarehouseForHistory.response.body.$.data.id}}/end
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Lịch sử có Phụ trách kho kèm thời điểm kết thúc - 200
 # data[0].id khớp ID vừa tạo và data[0].endedAt có giá trị.
-GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+GET {{baseUrl}}/employee-assignments/history?userId={{employeeId}}
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Hồ sơ vẫn giữ phân công chính đang hiệu lực - 200
 # data.assignments còn phân công chính và không chứa ID kiêm nhiệm vừa kết thúc.
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
 X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất admin - 200 LOGOUT_SUCCESS

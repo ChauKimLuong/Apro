@@ -13,7 +13,6 @@ type EmployeeAccountInput = {
 };
 
 type TransferAssignmentInput = {
-  userId: string;
   assignmentId: string;
   organizationalUnitId: string;
   positionId: string;
@@ -256,12 +255,12 @@ export class UsersRepository {
     }
   }
 
-  async endConcurrentAssignment(userId: string, assignmentId: string) {
+  async endConcurrentAssignment(assignmentId: string) {
     try {
       return await this.database.$transaction(
         async (tx) => {
-          const assignment = await tx.employeeAssignment.findFirst({
-            where: { id: assignmentId, userId },
+          const assignment = await tx.employeeAssignment.findUnique({
+            where: { id: assignmentId },
             select: {
               id: true,
               type: true,
@@ -312,17 +311,17 @@ export class UsersRepository {
   }
 
   async transferAssignment(input: TransferAssignmentInput) {
-    const { userId, assignmentId, organizationalUnitId, positionId, acting } =
-      input;
+    const { assignmentId, organizationalUnitId, positionId, acting } = input;
 
     try {
       return await this.database.$transaction(
         async (tx) => {
           const now = new Date();
-          const current = await tx.employeeAssignment.findFirst({
-            where: { id: assignmentId, userId },
+          const current = await tx.employeeAssignment.findUnique({
+            where: { id: assignmentId },
             select: {
               id: true,
+              userId: true,
               organizationalUnitId: true,
               positionId: true,
               managerAssignmentId: true,
@@ -343,6 +342,7 @@ export class UsersRepository {
             },
           });
           if (!current) return { kind: 'not-found' } as const;
+          const { userId } = current;
           if (
             current.type === 'TEMPORARY' ||
             (!current.isPrimary && current.type !== 'CONCURRENT')

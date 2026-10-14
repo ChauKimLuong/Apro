@@ -5,6 +5,10 @@ const timestampWithOffset = /T.*(?:Z|[+-]\d{2}:\d{2})$/;
 
 export class CreateConcurrentAssignmentDto {
   @Type(() => Object)
+  @IsUUID('4', { message: 'Vui lòng chọn lại nhân viên.' })
+  userId!: string;
+
+  @Type(() => Object)
   @IsUUID('4', { message: 'Vui lòng chọn lại đơn vị.' })
   organizationalUnitId!: string;
 
