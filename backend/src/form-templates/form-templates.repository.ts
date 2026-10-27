@@ -2,6 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import type { CreateFormTemplateDto } from './dto/create-form-template.dto';
 
+import type { Prisma } from '../generated/prisma/client';
+
+const draftSelect = {
+  id: true,
+  code: true,
+  status: true,
+  version: true,
+  createdAt: true,
+} satisfies Prisma.FormTemplateSelect;
+
+const formFieldSelect = {
+  id: true,
+  key: true,
+  label: true,
+  type: true,
+  isRequired: true,
+  sortOrder: true,
+  options: true,
+} satisfies Prisma.FormFieldSelect;
+
 @Injectable()
 export class FormTemplatesRepository {
   constructor(private readonly database: DatabaseService) {}
@@ -22,6 +42,40 @@ export class FormTemplatesRepository {
             type: true,
             isRequired: true,
             options: true,
+          },
+        },
+      },
+    });
+  }
+
+  listDrafts(createdByAssignmentId: string) {
+    return this.database.formTemplate.findMany({
+      where: { status: 'DRAFT', createdByAssignmentId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        ...draftSelect,
+        currentRevision: {
+          select: {
+            name: true,
+            _count: { select: { fields: true } },
+          },
+        },
+      },
+    });
+  }
+
+  findDraft(id: string, createdByAssignmentId: string) {
+    return this.database.formTemplate.findFirst({
+      where: { id, status: 'DRAFT', createdByAssignmentId },
+      select: {
+        ...draftSelect,
+        currentRevision: {
+          select: {
+            name: true,
+            fields: {
+              orderBy: { sortOrder: 'asc' },
+              select: formFieldSelect,
+            },
           },
         },
       },
@@ -57,15 +111,7 @@ export class FormTemplatesRepository {
           name: true,
           fields: {
             orderBy: { sortOrder: 'asc' },
-            select: {
-              id: true,
-              key: true,
-              label: true,
-              type: true,
-              isRequired: true,
-              sortOrder: true,
-              options: true,
-            },
+            select: formFieldSelect,
           },
         },
       });

@@ -39,3 +39,12 @@ Content-Type: application/json
     }
   ]
 }
+
+### Danh sách bản nháp của phân công đang chọn, kỳ vọng 200
+GET {{baseUrl}}/form-templates/drafts
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+### Mở một bản nháp, kỳ vọng 200
+# @prompt draftId Dán id của mẫu từ phản hồi danh sách
+GET {{baseUrl}}/form-templates/drafts/{{draftId}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}

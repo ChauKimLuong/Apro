@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import type { CreateFormTemplateDto } from './dto/create-form-template.dto';
@@ -28,6 +29,41 @@ export class FormTemplatesService {
       data: {
         fieldPalette: palette?.fields ?? [],
         starterTemplates,
+      },
+    };
+  }
+
+  async listDrafts(actorAssignmentId: string) {
+    const drafts = await this.forms.listDrafts(actorAssignmentId);
+
+    return {
+      data: drafts.map(({ currentRevision, ...draft }) => ({
+        ...draft,
+        name: currentRevision.name,
+        fieldCount: currentRevision._count.fields,
+      })),
+    };
+  }
+
+  async getDraft(id: string, actorAssignmentId: string) {
+    const draft = await this.forms.findDraft(id, actorAssignmentId);
+
+    if (!draft) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'FORM_TEMPLATE_DRAFT_NOT_FOUND',
+        message: 'Không tìm thấy mẫu nháp trong phân công đang chọn.',
+      });
+    }
+
+    const { currentRevision, ...template } = draft;
+
+    return {
+      data: {
+        ...template,
+        name: currentRevision.name,
+        fieldCount: currentRevision.fields.length,
+        fields: currentRevision.fields,
       },
     };
   }
