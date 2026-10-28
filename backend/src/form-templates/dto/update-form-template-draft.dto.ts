@@ -5,7 +5,7 @@ import { CreateFormTemplateDto } from './create-form-template.dto';
 
 export class UpdateFormTemplateDraftDto extends PickType(
   CreateFormTemplateDto,
-  ['name', 'fields'] as const,
+  ['name', 'fields', 'targetOrganizationalUnitId'] as const,
 ) {
   @Type(() => Object)
   @IsInt()

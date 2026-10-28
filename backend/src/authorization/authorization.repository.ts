@@ -24,6 +24,20 @@ const roleAssignmentFields = {
   systemRole: { select: systemRoleFields },
 } satisfies Prisma.RoleAssignmentSelect;
 
+function activeAssignmentWhere(
+  userId: string,
+  now: Date,
+): Prisma.EmployeeAssignmentWhereInput {
+  return {
+    userId,
+    startedAt: { lte: now },
+    OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+    user: { status: 'ACTIVE' },
+    organizationalUnit: { status: 'ACTIVE' },
+    position: { status: 'ACTIVE' },
+  };
+}
+
 function activeGrantWhere(
   userId: string,
   actorAssignmentId: string,
@@ -35,14 +49,7 @@ function activeGrantWhere(
     revokedAt: null,
     validFrom: { lte: now },
     OR: [{ validUntil: null }, { validUntil: { gt: now } }],
-    employeeAssignment: {
-      userId,
-      startedAt: { lte: now },
-      OR: [{ endedAt: null }, { endedAt: { gt: now } }],
-      user: { status: 'ACTIVE' },
-      organizationalUnit: { status: 'ACTIVE' },
-      position: { status: 'ACTIVE' },
-    },
+    employeeAssignment: activeAssignmentWhere(userId, now),
     systemRole: {
       isActive: true,
       rolePermissions: { some: { permission: { code } } },
@@ -202,12 +209,45 @@ export class AuthorizationRepository {
     actorAssignmentId: string,
     code: PermissionCode,
   ): Promise<boolean> {
+    const now = new Date();
+    if (code === 'FORM_CREATE' || code === 'FORM_UPDATE') {
+      const assignment = await this.database.employeeAssignment.findFirst({
+        where: { id: actorAssignmentId, ...activeAssignmentWhere(userId, now) },
+        select: { id: true },
+      });
+      return assignment !== null;
+    }
+
     const grant = await this.database.roleAssignment.findFirst({
-      where: activeGrantWhere(userId, actorAssignmentId, code, new Date()),
+      where: activeGrantWhere(userId, actorAssignmentId, code, now),
       select: { id: true },
     });
 
     return grant !== null;
+  }
+
+  async listAssignmentUnitAncestors(
+    actorAssignmentId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const assignment = await tx.employeeAssignment.findUnique({
+      where: { id: actorAssignmentId },
+      select: { organizationalUnitId: true },
+    });
+    if (!assignment) return [];
+
+    const path = await findUnitPath(tx, assignment.organizationalUnitId);
+    if (!path) return [];
+
+    const units = await tx.organizationalUnit.findMany({
+      where: { id: { in: [...path] }, status: 'ACTIVE' },
+      select: { id: true, name: true, type: true },
+    });
+    const byId = new Map(units.map((unit) => [unit.id, unit]));
+    return [...path].flatMap((id) => {
+      const unit = byId.get(id);
+      return unit ? [unit] : [];
+    });
   }
 
   findFormReviewGrants(

@@ -20,21 +20,24 @@ enum FieldType {
 }
 
 model FormTemplate {
-  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code                  String             @unique
-  status                FormTemplateStatus @default(DRAFT)
-  version               Int                @default(1)
-  createdByAssignmentId String             @map("created_by_assignment_id") @db.Uuid
-  reviewerAssignmentId  String?            @map("reviewer_assignment_id") @db.Uuid
-  reviewComment         String?            @map("review_comment")
-  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  submittedAt           DateTime?          @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt            DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  id                         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                       String             @unique
+  status                     FormTemplateStatus @default(DRAFT)
+  version                    Int                @default(1)
+  createdByAssignmentId      String             @map("created_by_assignment_id") @db.Uuid
+  targetOrganizationalUnitId String             @map("target_organizational_unit_id") @db.Uuid
+  reviewerAssignmentId       String?            @map("reviewer_assignment_id") @db.Uuid
+  reviewComment              String?            @map("review_comment")
+  createdAt                  DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  submittedAt                DateTime?          @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt                 DateTime?          @map("reviewed_at") @db.Timestamptz(6)
 
-  creator         EmployeeAssignment     @relation("FormCreator", fields: [createdByAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_creator")
-  reviewer        EmployeeAssignment?    @relation("FormReviewer", fields: [reviewerAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_reviewer")
-  revisions       FormTemplateRevision[] @relation("FormRevisions")
-  currentRevision FormTemplateRevision   @relation("FormCurrentRevision", fields: [id, version], references: [formTemplateId, version], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_current_revision")
+  creator                  EmployeeAssignment     @relation("FormCreator", fields: [createdByAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_creator")
+  targetOrganizationalUnit OrganizationalUnit     @relation("FormTargetUnit", fields: [targetOrganizationalUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_target_unit")
+  reviewer                 EmployeeAssignment?    @relation("FormReviewer", fields: [reviewerAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_reviewer")
+  revisions                FormTemplateRevision[] @relation("FormRevisions")
+  auditLogs                AuditLog[]
+  currentRevision          FormTemplateRevision   @relation("FormCurrentRevision", fields: [id, version], references: [formTemplateId, version], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_current_revision")
 
   @@unique([id, version])
   @@map("form_templates")
@@ -57,7 +60,7 @@ model FormTemplateRevision {
 model FormField {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   formTemplateId  String    @map("form_template_id") @db.Uuid
-  templateVersion Int      @map("template_version")
+  templateVersion Int       @map("template_version")
   key             String
   label           String
   type            FieldType

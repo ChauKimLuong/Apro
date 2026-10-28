@@ -12,8 +12,15 @@ import { DatabaseService } from '../src/database/database.service';
 const header = 'X-Employee-Assignment-Id';
 const templatesPath = '/form-templates';
 const queuePath = `${templatesPath}/review-queue`;
+const targetUnitsPath = `${templatesPath}/target-units`;
 const draftPath = (id: string) => `${templatesPath}/drafts/${id}`;
 const fields = [{ key: 'purpose', label: 'Mục đích', type: 'TEXT' }];
+const units = {
+  company: '30000000-0000-4000-8000-000000000101',
+  division: '30000000-0000-4000-8000-000000000102',
+  department: '30000000-0000-4000-8000-000000000103',
+  otherCompany: '30000000-0000-4000-8000-000000000001',
+};
 
 const assignments = {
   an: '20000000-0000-4000-8000-000000000101',
@@ -26,6 +33,7 @@ const assignments = {
 
 type Agent = ReturnType<typeof request.agent>;
 type Draft = { id: string; version: number };
+type SubmittedDraft = Draft & { submittedAt: string };
 
 // Run on a separate local DB after migrate deploy and seed-provisioning.cjs.
 // npm run test:e2e -- --runInBand --testRegex=form-template-review-queue.local-spec.ts
@@ -72,10 +80,7 @@ describe('Form template review queue (local e2e)', () => {
           code: 'REQUESTER',
           name: 'Review queue test author',
           rolePermissions: {
-            create: [
-              { permission: { connect: { code: 'FORM_CREATE' } } },
-              { permission: { connect: { code: 'FORM_UPDATE' } } },
-            ],
+            create: [{ permission: { connect: { code: 'FORM_UPDATE' } } }],
           },
         },
       });
@@ -140,6 +145,7 @@ describe('Form template review queue (local e2e)', () => {
     try {
       await database.$transaction(async (tx) => {
         const forms = { in: draftIds };
+        await tx.auditLog.deleteMany({ where: { formTemplateId: forms } });
         await tx.formField.deleteMany({ where: { formTemplateId: forms } });
         await tx.formTemplateRevision.deleteMany({
           where: { formTemplateId: forms },
@@ -168,12 +174,18 @@ describe('Form template review queue (local e2e)', () => {
     agent: Agent,
     assignmentId: string,
     draftFields = fields,
+    targetOrganizationalUnitId?: string,
   ) {
     const code = `QUEUE_${randomUUID().replaceAll('-', '').toUpperCase()}`;
     const response = await agent
       .post(templatesPath)
       .set(header, assignmentId)
-      .send({ code, name: `Mẫu ${code}`, fields: draftFields })
+      .send({
+        code,
+        name: `Mẫu ${code}`,
+        fields: draftFields,
+        targetOrganizationalUnitId,
+      })
       .expect(201);
     const { id, version } = (response.body as { data: Draft }).data;
     draftIds.push(id);
@@ -193,6 +205,39 @@ describe('Form template review queue (local e2e)', () => {
       .set(header, assignmentId)
       .expect(200);
     return (response.body as { data: Draft[] }).data.map(({ id }) => id);
+  }
+
+  async function sendForReview(
+    agent = agents.ha,
+    assignmentId = assignments.ha,
+    targetOrganizationalUnitId?: string,
+  ) {
+    const draft = await createDraft(
+      agent,
+      assignmentId,
+      fields,
+      targetOrganizationalUnitId,
+    );
+    const response = await submit(agent, assignmentId, draft).expect(200);
+    return (response.body as { data: SubmittedDraft }).data;
+  }
+
+  function review(
+    agent: Agent,
+    assignmentId: string,
+    draft: SubmittedDraft,
+    decision: 'APPROVE' | 'RETURN' = 'APPROVE',
+    comment?: string,
+  ) {
+    return agent
+      .post(`${templatesPath}/${draft.id}/review`)
+      .set(header, assignmentId)
+      .send({
+        decision,
+        expectedVersion: draft.version,
+        expectedSubmittedAt: draft.submittedAt,
+        comment,
+      });
   }
 
   it('sends an unassigned draft, preserves its revision, and removes it from drafts', async () => {
@@ -313,5 +358,369 @@ describe('Form template review queue (local e2e)', () => {
         .expect(403);
       expect(response.body).toMatchObject({ code: 'MISSING_PERMISSION' });
     }
+  });
+
+  it('shows the submitted revision, approves within scope, and logs the sender and reviewer', async () => {
+    const draft = await sendForReview();
+    const detail = await agents.dung
+      .get(`${queuePath}/${draft.id}`)
+      .set(header, assignments.dung)
+      .expect(200);
+    expect(detail.body).toMatchObject({
+      data: {
+        id: draft.id,
+        version: draft.version,
+        submittedAt: draft.submittedAt,
+        fields,
+      },
+    });
+
+    const response = await review(agents.dung, assignments.dung, draft).expect(
+      200,
+    );
+    expect(response.body).toMatchObject({
+      code: 'FORM_TEMPLATE_APPROVED',
+      data: {
+        id: draft.id,
+        version: draft.version,
+        status: 'ACTIVE',
+        reviewerAssignmentId: assignments.dung,
+      },
+    });
+    const logs = await database.auditLog.findMany({
+      where: { formTemplateId: draft.id },
+      orderBy: { occurredAt: 'asc' },
+    });
+    expect(
+      logs.map(({ eventType, actorAssignmentId }) => ({
+        eventType,
+        actorAssignmentId,
+      })),
+    ).toEqual([
+      {
+        eventType: 'FORM_TEMPLATE_SUBMITTED',
+        actorAssignmentId: assignments.ha,
+      },
+      {
+        eventType: 'FORM_TEMPLATE_APPROVED',
+        actorAssignmentId: assignments.dung,
+      },
+    ]);
+    expect(logs[1].details).toMatchObject({
+      version: draft.version,
+      submittedAt: draft.submittedAt,
+    });
+    expect(await queueIds(agents.dung, assignments.dung)).not.toContain(
+      draft.id,
+    );
+  });
+
+  it('requires a return comment and shows the trimmed feedback to the author', async () => {
+    const draft = await sendForReview();
+    await review(agents.an, assignments.an, draft, 'RETURN', '   ').expect(400);
+    const response = await review(
+      agents.an,
+      assignments.an,
+      draft,
+      'RETURN',
+      '  Bổ sung mục đích.  ',
+    ).expect(200);
+    expect(response.body).toMatchObject({
+      code: 'FORM_TEMPLATE_RETURNED',
+      data: {
+        status: 'RETURNED',
+        reviewerAssignmentId: assignments.an,
+        reviewComment: 'Bổ sung mục đích.',
+      },
+    });
+    const authorView = await agents.ha
+      .get(draftPath(draft.id))
+      .set(header, assignments.ha)
+      .expect(200);
+    expect(authorView.body).toMatchObject({
+      data: { status: 'RETURNED', reviewComment: 'Bổ sung mục đích.' },
+    });
+    const log = await database.auditLog.findFirstOrThrow({
+      where: { formTemplateId: draft.id, eventType: 'FORM_TEMPLATE_RETURNED' },
+    });
+    expect(log.details).toMatchObject({
+      version: draft.version,
+      comment: 'Bổ sung mục đích.',
+    });
+    await agents.member
+      .get(draftPath(draft.id))
+      .set(header, assignments.member)
+      .expect(404);
+  });
+
+  it('blocks review detail and decisions outside scope and through another assignment of the same account', async () => {
+    const draft = await sendForReview();
+    await agents.chi
+      .get(`${queuePath}/${draft.id}`)
+      .set(header, assignments.chi)
+      .expect(404);
+    await review(agents.chi, assignments.chi, draft).expect(404);
+    await review(agents.ha, assignments.ha, draft).expect(403);
+
+    const own = await sendForReview(agents.dung, fixture!.secondaryId);
+    await agents.dung
+      .get(`${queuePath}/${own.id}`)
+      .set(header, assignments.dung)
+      .expect(404);
+    await review(agents.dung, assignments.dung, own).expect(404);
+    await agents.an
+      .get(`${queuePath}/${own.id}`)
+      .set(header, assignments.an)
+      .expect(200);
+  });
+
+  it('rejects a decision from an old revision or submission round', async () => {
+    const draft = await sendForReview();
+    await review(agents.dung, assignments.dung, {
+      ...draft,
+      version: draft.version + 1,
+    }).expect(409);
+    await review(agents.dung, assignments.dung, {
+      ...draft,
+      submittedAt: '2026-10-28T07:00:00.000Z',
+    }).expect(409);
+    await agents.dung
+      .get(`${queuePath}/${draft.id}`)
+      .set(header, assignments.dung)
+      .expect(200);
+  });
+
+  it('accepts one of two concurrent decisions and writes one decision log', async () => {
+    const draft = await sendForReview();
+    const responses = await Promise.all([
+      review(agents.dung, assignments.dung, draft),
+      review(agents.an, assignments.an, draft, 'RETURN', 'Bổ sung thông tin.'),
+    ]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 409]);
+    expect(responses.find(({ status }) => status === 409)?.body).toMatchObject({
+      code: 'FORM_TEMPLATE_REVIEW_CHANGED',
+    });
+    await expect(
+      database.auditLog.count({
+        where: {
+          formTemplateId: draft.id,
+          eventType: { not: 'FORM_TEMPLATE_SUBMITTED' },
+        },
+      }),
+    ).resolves.toBe(1);
+  });
+
+  it('rolls back the decision when PostgreSQL blocks the audit insert', async () => {
+    const draft = await sendForReview();
+    await database.$executeRaw`
+      ALTER TABLE audit_logs ADD CONSTRAINT ck_test_review_log_rejection
+      CHECK (details->>'comment' IS DISTINCT FROM 'ROLLBACK_REVIEW_TEST') NOT VALID
+    `;
+    try {
+      await review(
+        agents.dung,
+        assignments.dung,
+        draft,
+        'RETURN',
+        'ROLLBACK_REVIEW_TEST',
+      ).expect(500);
+      const row = await database.formTemplate.findUniqueOrThrow({
+        where: { id: draft.id },
+      });
+      expect(row).toMatchObject({
+        status: 'PENDING_REVIEW',
+        reviewedAt: null,
+        reviewerAssignmentId: null,
+        reviewComment: null,
+      });
+      await expect(
+        database.auditLog.count({ where: { formTemplateId: draft.id } }),
+      ).resolves.toBe(1);
+    } finally {
+      await database.$executeRaw`ALTER TABLE audit_logs DROP CONSTRAINT ck_test_review_log_rejection`;
+    }
+  });
+
+  it('lists the selected assignment’s active unit and ancestors in order', async () => {
+    const response = await agents.ha
+      .get(targetUnitsPath)
+      .set(header, assignments.ha)
+      .expect(200);
+    const { data } = response.body as { data: Array<{ id: string }> };
+    expect(data.map(({ id }) => id)).toEqual([
+      units.department,
+      units.division,
+      units.company,
+    ]);
+    await agents.chi
+      .get(targetUnitsPath)
+      .set(header, assignments.chi)
+      .expect(200);
+  });
+
+  it('allows an employee without a create grant to create and send, and rejects borrowed or ended assignments', async () => {
+    const draft = await createDraft(agents.chi, assignments.chi);
+    await submit(agents.chi, assignments.chi, draft).expect(200);
+    await agents.chi
+      .get(templatesPath + '/drafts')
+      .set(header, assignments.ha)
+      .expect(403);
+
+    const secondaryId = fixture!.secondaryId;
+    await database.employeeAssignment.update({
+      where: { id: secondaryId },
+      data: { endedAt: new Date() },
+    });
+    try {
+      await agents.dung
+        .get(targetUnitsPath)
+        .set(header, secondaryId)
+        .expect(403);
+    } finally {
+      await database.employeeAssignment.update({
+        where: { id: secondaryId },
+        data: { endedAt: null },
+      });
+    }
+  });
+
+  it('stores the selected root and rejects a target on another branch', async () => {
+    for (const target of [
+      units.department,
+      units.division,
+      units.company,
+      undefined,
+    ]) {
+      const draft = await createDraft(
+        agents.ha,
+        assignments.ha,
+        fields,
+        target,
+      );
+      const response = await agents.ha
+        .get(draftPath(draft.id))
+        .set(header, assignments.ha)
+        .expect(200);
+      expect(response.body).toMatchObject({
+        data: { targetOrganizationalUnitId: target ?? units.department },
+      });
+    }
+
+    const response = await agents.ha
+      .post(templatesPath)
+      .set(header, assignments.ha)
+      .send({
+        code: `OTHER_BRANCH_${randomUUID().replaceAll('-', '').toUpperCase()}`,
+        name: 'Mẫu khác nhánh',
+        fields,
+        targetOrganizationalUnitId: units.otherCompany,
+      })
+      .expect(400);
+    expect(response.body).toMatchObject({
+      code: 'INVALID_FORM_TEMPLATE_TARGET_UNIT',
+    });
+  });
+
+  it('lets an author change the target when editing a draft and uses the saved target for review', async () => {
+    const draft = await createDraft(agents.ha, assignments.ha);
+    const edit = (version: number, targetOrganizationalUnitId?: string) =>
+      agents.ha.put(draftPath(draft.id)).set(header, assignments.ha).send({
+        expectedVersion: version,
+        name: 'Mẫu đổi phạm vi',
+        fields,
+        targetOrganizationalUnitId,
+      });
+
+    const invalid = await edit(draft.version, units.otherCompany).expect(400);
+    expect(invalid.body).toMatchObject({
+      code: 'INVALID_FORM_TEMPLATE_TARGET_UNIT',
+    });
+    const updated = await edit(draft.version, units.company).expect(200);
+    expect(updated.body).toMatchObject({
+      data: { version: 2, targetOrganizationalUnitId: units.company },
+    });
+    await edit(draft.version, units.division).expect(409);
+
+    const legacy = await edit(2).expect(200);
+    expect(legacy.body).toMatchObject({
+      data: { version: 3, targetOrganizationalUnitId: units.company },
+    });
+    await submit(agents.ha, assignments.ha, { ...draft, version: 3 }).expect(
+      200,
+    );
+    await edit(3, units.department).expect(404);
+    expect(await queueIds(agents.dung, assignments.dung)).not.toContain(
+      draft.id,
+    );
+    expect(await queueIds(agents.an, assignments.an)).toContain(draft.id);
+  });
+
+  it('only one concurrent edit can save a different target on the same revision', async () => {
+    const draft = await createDraft(agents.ha, assignments.ha);
+    const requests = [units.division, units.company].map(
+      (targetOrganizationalUnitId) =>
+        agents.ha.put(draftPath(draft.id)).set(header, assignments.ha).send({
+          expectedVersion: draft.version,
+          name: 'Mẫu chỉnh đồng thời',
+          fields,
+          targetOrganizationalUnitId,
+        }),
+    );
+    const results = await Promise.all(requests);
+    expect(results.map(({ status }) => status).sort()).toEqual([200, 409]);
+    const savedTarget =
+      results[0].status === 200 ? units.division : units.company;
+    const row = await database.formTemplate.findUniqueOrThrow({
+      where: { id: draft.id },
+    });
+    expect(row).toMatchObject({
+      version: 2,
+      targetOrganizationalUnitId: savedTarget,
+    });
+  });
+
+  it('applies the review scope to the target even when the author reports to the reviewer', async () => {
+    const department = await sendForReview();
+    const division = await sendForReview(
+      agents.ha,
+      assignments.ha,
+      units.division,
+    );
+    const company = await sendForReview(
+      agents.ha,
+      assignments.ha,
+      units.company,
+    );
+
+    const dungQueue = await queueIds(agents.dung, assignments.dung);
+    expect(dungQueue).toContain(department.id);
+    expect(dungQueue).not.toContain(division.id);
+    expect(dungQueue).not.toContain(company.id);
+    const quangQueue = await queueIds(agents.quang, assignments.quang);
+    expect(quangQueue).toContain(division.id);
+    expect(quangQueue).not.toContain(company.id);
+
+    await agents.dung
+      .get(`${queuePath}/${company.id}`)
+      .set(header, assignments.dung)
+      .expect(404);
+    await review(agents.dung, assignments.dung, company).expect(404);
+    await review(agents.quang, assignments.quang, company).expect(404);
+    await review(agents.quang, assignments.quang, division).expect(200);
+    const response = await review(agents.an, assignments.an, company).expect(
+      200,
+    );
+    expect(response.body).toMatchObject({
+      data: { targetOrganizationalUnitId: units.company, status: 'ACTIVE' },
+    });
+    const log = await database.auditLog.findFirstOrThrow({
+      where: {
+        formTemplateId: company.id,
+        eventType: 'FORM_TEMPLATE_APPROVED',
+      },
+    });
+    expect(log.details).toMatchObject({
+      targetOrganizationalUnitId: units.company,
+    });
   });
 });

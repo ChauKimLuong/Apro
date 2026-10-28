@@ -3,7 +3,14 @@ import { AuthorizationRepository } from '../authorization/authorization.reposito
 import { DatabaseService } from '../database/database.service';
 import type { Prisma } from '../generated/prisma/client';
 import type { CreateFormTemplateDto } from './dto/create-form-template.dto';
+import type { ReviewFormTemplateDto } from './dto/review-form-template.dto';
 import type { UpdateFormTemplateDraftDto } from './dto/update-form-template-draft.dto';
+
+const targetUnitSelect = {
+  id: true,
+  name: true,
+  type: true,
+} satisfies Prisma.OrganizationalUnitSelect;
 
 const draftSelect = {
   id: true,
@@ -11,6 +18,8 @@ const draftSelect = {
   status: true,
   version: true,
   createdAt: true,
+  targetOrganizationalUnitId: true,
+  targetOrganizationalUnit: { select: targetUnitSelect },
 } satisfies Prisma.FormTemplateSelect;
 
 const formFieldSelect = {
@@ -22,6 +31,16 @@ const formFieldSelect = {
   sortOrder: true,
   options: true,
 } satisfies Prisma.FormFieldSelect;
+
+const waitingForReview = {
+  status: 'PENDING_REVIEW',
+  reviewerAssignmentId: null,
+} as const;
+
+const revisionDetailSelect = {
+  name: true,
+  fields: { orderBy: { sortOrder: 'asc' }, select: formFieldSelect },
+} satisfies Prisma.FormTemplateRevisionSelect;
 
 async function collectBranchIds(
   rootId: string,
@@ -51,6 +70,14 @@ export class FormTemplatesRepository {
     private readonly authorization: AuthorizationRepository,
   ) {}
 
+  listTargetUnits(actorAssignmentId: string) {
+    return this.database.$transaction(
+      (tx) =>
+        this.authorization.listAssignmentUnitAncestors(actorAssignmentId, tx),
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
   listPresets() {
     return this.database.formPreset.findMany({
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
@@ -75,7 +102,7 @@ export class FormTemplatesRepository {
 
   listDrafts(createdByAssignmentId: string) {
     return this.database.formTemplate.findMany({
-      where: { status: 'DRAFT', createdByAssignmentId },
+      where: { status: { in: ['DRAFT', 'RETURNED'] }, createdByAssignmentId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: {
         ...draftSelect,
@@ -91,18 +118,15 @@ export class FormTemplatesRepository {
 
   findDraft(id: string, createdByAssignmentId: string) {
     return this.database.formTemplate.findFirst({
-      where: { id, status: 'DRAFT', createdByAssignmentId },
+      where: {
+        id,
+        status: { in: ['DRAFT', 'RETURNED'] },
+        createdByAssignmentId,
+      },
       select: {
         ...draftSelect,
-        currentRevision: {
-          select: {
-            name: true,
-            fields: {
-              orderBy: { sortOrder: 'asc' },
-              select: formFieldSelect,
-            },
-          },
-        },
+        reviewComment: true,
+        currentRevision: { select: revisionDetailSelect },
       },
     });
   }
@@ -114,21 +138,46 @@ export class FormTemplatesRepository {
   ) {
     const owner = { id, createdByAssignmentId: actorAssignmentId };
 
-    const [submitted] = await this.database.formTemplate.updateManyAndReturn({
-      where: {
-        ...owner,
-        status: 'DRAFT',
-        version: expectedVersion,
-        currentRevision: { fields: { some: {} } },
-      },
-      data: {
-        status: 'PENDING_REVIEW',
-        submittedAt: new Date(),
-        reviewerAssignmentId: null,
-        reviewedAt: null,
-        reviewComment: null,
-      },
-      select: { ...draftSelect, reviewerAssignmentId: true, submittedAt: true },
+    const submitted = await this.database.$transaction(async (tx) => {
+      const submittedAt = new Date();
+      const [template] = await tx.formTemplate.updateManyAndReturn({
+        where: {
+          ...owner,
+          status: 'DRAFT',
+          version: expectedVersion,
+          currentRevision: { fields: { some: {} } },
+        },
+        data: {
+          status: 'PENDING_REVIEW',
+          submittedAt,
+          reviewerAssignmentId: null,
+          reviewedAt: null,
+          reviewComment: null,
+        },
+        select: {
+          ...draftSelect,
+          reviewerAssignmentId: true,
+          submittedAt: true,
+        },
+      });
+
+      if (template) {
+        await tx.auditLog.create({
+          data: {
+            formTemplateId: id,
+            actorAssignmentId,
+            eventType: 'FORM_TEMPLATE_SUBMITTED',
+            occurredAt: submittedAt,
+            details: {
+              version: template.version,
+              submittedAt: submittedAt.toISOString(),
+              targetOrganizationalUnitId: template.targetOrganizationalUnitId,
+            },
+          },
+        });
+      }
+
+      return template;
     });
 
     if (submitted) return { kind: 'submitted', data: submitted } as const;
@@ -157,7 +206,7 @@ export class FormTemplatesRepository {
     return { kind: 'changed' } as const;
   }
 
-  private async reviewQueueWhere(
+  private async reviewScopeWhere(
     tx: Prisma.TransactionClient,
     userId: string,
     actorAssignmentId: string,
@@ -171,8 +220,6 @@ export class FormTemplatesRepository {
     if (!grant) return null;
 
     const where: Prisma.FormTemplateWhereInput = {
-      status: 'PENDING_REVIEW',
-      reviewerAssignmentId: null,
       creator: { userId: { not: userId } },
     };
 
@@ -196,6 +243,7 @@ export class FormTemplatesRepository {
     return {
       ...where,
       createdByAssignmentId: { in: managedIds },
+      targetOrganizationalUnitId: { in: unitIds },
       creator: {
         userId: { not: userId },
         organizationalUnitId: { in: unitIds },
@@ -206,26 +254,140 @@ export class FormTemplatesRepository {
   listReviewQueue(userId: string, actorAssignmentId: string) {
     return this.database.$transaction(
       async (tx) => {
-        const where = await this.reviewQueueWhere(
+        const scope = await this.reviewScopeWhere(
           tx,
           userId,
           actorAssignmentId,
         );
-        if (!where) return null;
+        if (!scope) return null;
 
         return tx.formTemplate.findMany({
-          where,
+          where: { ...scope, ...waitingForReview },
           orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             code: true,
             version: true,
             submittedAt: true,
+            targetOrganizationalUnitId: true,
+            targetOrganizationalUnit: { select: targetUnitSelect },
             currentRevision: { select: { name: true } },
           },
         });
       },
       { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  findReviewDraft(id: string, userId: string, actorAssignmentId: string) {
+    return this.database.$transaction(
+      async (tx) => {
+        const scope = await this.reviewScopeWhere(
+          tx,
+          userId,
+          actorAssignmentId,
+        );
+        if (!scope) return { kind: 'forbidden' } as const;
+
+        const draft = await tx.formTemplate.findFirst({
+          where: { ...scope, ...waitingForReview, id },
+          select: {
+            ...draftSelect,
+            submittedAt: true,
+            currentRevision: { select: revisionDetailSelect },
+          },
+        });
+
+        return draft
+          ? ({ kind: 'found', data: draft } as const)
+          : ({ kind: 'not-found' } as const);
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  reviewDraft(
+    id: string,
+    input: ReviewFormTemplateDto,
+    userId: string,
+    actorAssignmentId: string,
+  ) {
+    return this.database.$transaction(
+      async (tx) => {
+        const scope = await this.reviewScopeWhere(
+          tx,
+          userId,
+          actorAssignmentId,
+        );
+        if (!scope) return { kind: 'forbidden' } as const;
+
+        const current = await tx.formTemplate.findFirst({
+          where: { ...scope, id },
+          select: {
+            status: true,
+            version: true,
+            submittedAt: true,
+            reviewerAssignmentId: true,
+          },
+        });
+
+        if (!current?.submittedAt) return { kind: 'not-found' } as const;
+        const submittedAt = current.submittedAt.toISOString();
+        if (
+          current.status !== waitingForReview.status ||
+          current.reviewerAssignmentId !== null ||
+          current.version !== input.expectedVersion ||
+          submittedAt !== input.expectedSubmittedAt
+        ) {
+          return { kind: 'changed' } as const;
+        }
+
+        const approved = input.decision === 'APPROVE';
+        const reviewedAt = new Date();
+        const [reviewed] = await tx.formTemplate.updateManyAndReturn({
+          where: {
+            ...scope,
+            ...waitingForReview,
+            id,
+            version: current.version,
+            submittedAt: current.submittedAt,
+          },
+          data: {
+            status: approved ? 'ACTIVE' : 'RETURNED',
+            reviewerAssignmentId: actorAssignmentId,
+            reviewedAt,
+            reviewComment: input.comment ?? null,
+          },
+          select: {
+            ...draftSelect,
+            reviewerAssignmentId: true,
+            reviewedAt: true,
+            reviewComment: true,
+          },
+        });
+
+        if (!reviewed) return { kind: 'changed' } as const;
+
+        await tx.auditLog.create({
+          data: {
+            formTemplateId: id,
+            actorAssignmentId,
+            eventType: approved
+              ? 'FORM_TEMPLATE_APPROVED'
+              : 'FORM_TEMPLATE_RETURNED',
+            occurredAt: reviewedAt,
+            details: {
+              version: reviewed.version,
+              submittedAt,
+              targetOrganizationalUnitId: reviewed.targetOrganizationalUnitId,
+              comment: reviewed.reviewComment,
+            },
+          },
+        });
+
+        return { kind: 'reviewed', data: reviewed } as const;
+      },
+      { isolationLevel: 'Serializable' },
     );
   }
 
@@ -261,17 +423,33 @@ export class FormTemplatesRepository {
   }
 
   createDraft(draft: CreateFormTemplateDto, createdByAssignmentId: string) {
-    return this.database.$transaction(async (tx) => {
-      const template = await tx.formTemplate.create({
-        data: {
-          code: draft.code,
-          createdByAssignmentId,
-        },
-      });
+    return this.database.$transaction(
+      async (tx) => {
+        const allowedUnits =
+          await this.authorization.listAssignmentUnitAncestors(
+            createdByAssignmentId,
+            tx,
+          );
+        const targetId =
+          draft.targetOrganizationalUnitId?.toLowerCase() ??
+          allowedUnits[0]?.id;
+        if (!targetId || !allowedUnits.some((unit) => unit.id === targetId))
+          return null;
 
-      const revision = await this.createRevision(tx, template, draft);
-      return { ...template, ...revision };
-    });
+        const template = await tx.formTemplate.create({
+          data: {
+            code: draft.code,
+            createdByAssignmentId,
+            targetOrganizationalUnitId: targetId,
+          },
+          include: { targetOrganizationalUnit: { select: targetUnitSelect } },
+        });
+
+        const revision = await this.createRevision(tx, template, draft);
+        return { ...template, ...revision };
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   updateDraft(
@@ -280,12 +458,38 @@ export class FormTemplatesRepository {
     createdByAssignmentId: string,
   ) {
     const scope = { id, createdByAssignmentId, status: 'DRAFT' } as const;
+    const targetId = draft.targetOrganizationalUnitId?.toLowerCase();
 
     return this.database.$transaction(
       async (tx) => {
+        if (targetId) {
+          const current = await tx.formTemplate.findFirst({
+            where: scope,
+            select: { version: true },
+          });
+          if (!current) return { kind: 'not-found' } as const;
+          if (current.version !== draft.expectedVersion) {
+            return {
+              kind: 'version-conflict',
+              currentVersion: current.version,
+            } as const;
+          }
+
+          const units = await this.authorization.listAssignmentUnitAncestors(
+            createdByAssignmentId,
+            tx,
+          );
+          if (!units.some((unit) => unit.id === targetId)) {
+            return { kind: 'invalid-target' } as const;
+          }
+        }
+
         const [template] = await tx.formTemplate.updateManyAndReturn({
           where: { ...scope, version: draft.expectedVersion },
-          data: { version: { increment: 1 } },
+          data: {
+            version: { increment: 1 },
+            targetOrganizationalUnitId: targetId,
+          },
           select: draftSelect,
         });
 
@@ -310,7 +514,7 @@ export class FormTemplatesRepository {
           data: { ...template, ...revision },
         } as const;
       },
-      { isolationLevel: 'ReadCommitted' },
+      { isolationLevel: targetId ? 'Serializable' : 'ReadCommitted' },
     );
   }
 }

@@ -8,6 +8,7 @@ import {
   IsNotEmpty,
   IsObject,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   ValidateIf,
@@ -71,6 +72,11 @@ export class CreateFormTemplateDto {
   @IsNotEmpty()
   @MaxLength(120)
   name!: string;
+
+  @Type(() => Object)
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsUUID('4', { message: 'Vui lòng chọn lại đơn vị áp dụng.' })
+  targetOrganizationalUnitId?: string;
 
   @IsArray()
   @ArrayMaxSize(50)

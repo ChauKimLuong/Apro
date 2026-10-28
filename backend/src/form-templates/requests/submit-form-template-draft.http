@@ -1,4 +1,4 @@
-@baseUrl = http://127.0.0.1:3002
+@baseUrl = http://127.0.0.1:3004
 @authorAssignmentId = 20000000-0000-4000-8000-000000000101
 
 # Bật cookie jar trong REST Client và chạy lần lượt. Có thể đổi cổng theo backend.

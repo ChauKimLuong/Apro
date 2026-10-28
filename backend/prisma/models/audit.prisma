@@ -1,0 +1,24 @@
+enum AuditEventType {
+  FORM_TEMPLATE_SUBMITTED
+  FORM_TEMPLATE_RETURNED
+  FORM_TEMPLATE_APPROVED
+
+  @@map("audit_event_type")
+}
+
+model AuditLog {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  formTemplateId    String?        @map("form_template_id") @db.Uuid
+  workflowId        String?        @map("workflow_id") @db.Uuid
+  requestId         String?        @map("request_id") @db.Uuid
+  actorAssignmentId String         @map("actor_assignment_id") @db.Uuid
+  eventType         AuditEventType @map("event_type")
+  details           Json?          @db.JsonB
+  occurredAt        DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  formTemplate FormTemplate?      @relation(fields: [formTemplateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_audit_logs_form_template")
+  actor        EmployeeAssignment @relation(fields: [actorAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_audit_logs_actor_assignment")
+
+  @@index([formTemplateId, occurredAt], map: "ix_audit_logs_form_occurred")
+  @@map("audit_logs")
+}
