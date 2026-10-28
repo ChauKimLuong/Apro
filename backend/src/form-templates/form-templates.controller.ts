@@ -6,14 +6,19 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { CreateFormTemplateDto } from './dto/create-form-template.dto';
+import { UpdateFormTemplateDraftDto } from './dto/update-form-template-draft.dto';
 import { FormTemplatesService } from './form-templates.service';
-import { FormCreateGuard } from './guards/form-create.guard';
+import {
+  FormCreateGuard,
+  FormUpdateGuard,
+} from './guards/form-assignment-permission.guard';
 
 type FormActorRequest = AuthenticatedRequest & {
   actorAssignmentId: string;
@@ -52,6 +57,16 @@ export class FormTemplatesController {
     @Req() request: FormActorRequest,
   ) {
     return this.forms.getDraft(id, request.actorAssignmentId);
+  }
+
+  @Put('drafts/:id')
+  @UseGuards(AuthSessionGuard, FormUpdateGuard)
+  updateDraft(
+    @Param('id', draftIdPipe) id: string,
+    @Body() body: UpdateFormTemplateDraftDto,
+    @Req() request: FormActorRequest,
+  ) {
+    return this.forms.updateDraft(id, body, request.actorAssignmentId);
   }
 
   @Post()
