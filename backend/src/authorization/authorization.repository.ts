@@ -210,6 +210,25 @@ export class AuthorizationRepository {
     return grant !== null;
   }
 
+  findFormReviewGrants(
+    userId: string,
+    actorAssignmentId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.roleAssignment.findMany({
+      where: activeGrantWhere(
+        userId,
+        actorAssignmentId,
+        'FORM_REVIEW',
+        new Date(),
+      ),
+      select: {
+        scopeType: true,
+        employeeAssignment: { select: { organizationalUnitId: true } },
+      },
+    });
+  }
+
   async hasGlobalPermission(
     userId: string,
     actorAssignmentId: string,

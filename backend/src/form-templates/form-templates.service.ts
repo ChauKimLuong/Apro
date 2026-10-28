@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -95,6 +96,67 @@ export class FormTemplatesService {
         fieldCount: currentRevision.fields.length,
         fields: currentRevision.fields,
       },
+    };
+  }
+
+  async submitDraft(
+    id: string,
+    expectedVersion: number,
+    actorAssignmentId: string,
+  ) {
+    const result = await this.forms.submitDraft(
+      id,
+      expectedVersion,
+      actorAssignmentId,
+    );
+
+    switch (result.kind) {
+      case 'not-found':
+        throw draftNotFound();
+      case 'empty':
+        throw new BadRequestException({
+          statusCode: 400,
+          code: 'FORM_TEMPLATE_EMPTY_DRAFT',
+          message: 'Thêm ít nhất một trường trước khi gửi kiểm duyệt.',
+        });
+      case 'version-conflict':
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'FORM_TEMPLATE_DRAFT_VERSION_CONFLICT',
+          message:
+            'Mẫu nháp đã có phiên bản mới. Vui lòng mở lại mẫu trước khi gửi.',
+          currentVersion: result.currentVersion,
+        });
+      case 'changed':
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'FORM_TEMPLATE_DRAFT_CHANGED',
+          message: 'Mẫu đã được gửi hoặc không còn ở trạng thái nháp.',
+        });
+      case 'submitted':
+        return {
+          code: 'FORM_TEMPLATE_SUBMITTED',
+          message: 'Đã gửi mẫu đi kiểm duyệt.',
+          data: result.data,
+        };
+    }
+  }
+
+  async listReviewQueue(userId: string, actorAssignmentId: string) {
+    const queue = await this.forms.listReviewQueue(userId, actorAssignmentId);
+    if (!queue) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'MISSING_PERMISSION',
+        message: 'Phân công đang chọn không có quyền kiểm duyệt mẫu.',
+      });
+    }
+
+    return {
+      data: queue.map(({ currentRevision, ...template }) => ({
+        ...template,
+        name: currentRevision.name,
+      })),
     };
   }
 

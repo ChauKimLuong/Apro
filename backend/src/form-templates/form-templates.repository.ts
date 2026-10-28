@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AuthorizationRepository } from '../authorization/authorization.repository';
 import { DatabaseService } from '../database/database.service';
 import type { Prisma } from '../generated/prisma/client';
 import type { CreateFormTemplateDto } from './dto/create-form-template.dto';
@@ -22,9 +23,33 @@ const formFieldSelect = {
   options: true,
 } satisfies Prisma.FormFieldSelect;
 
+async function collectBranchIds(
+  rootId: string,
+  findChildren: (parentIds: string[]) => Promise<Array<{ id: string }>>,
+) {
+  const seen = new Set([rootId]);
+  let level = [rootId];
+
+  while (level.length > 0) {
+    const children = await findChildren(level);
+    level = [];
+
+    for (const { id } of children) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      level.push(id);
+    }
+  }
+
+  return [...seen];
+}
+
 @Injectable()
 export class FormTemplatesRepository {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly authorization: AuthorizationRepository,
+  ) {}
 
   listPresets() {
     return this.database.formPreset.findMany({
@@ -80,6 +105,128 @@ export class FormTemplatesRepository {
         },
       },
     });
+  }
+
+  async submitDraft(
+    id: string,
+    expectedVersion: number,
+    actorAssignmentId: string,
+  ) {
+    const owner = { id, createdByAssignmentId: actorAssignmentId };
+
+    const [submitted] = await this.database.formTemplate.updateManyAndReturn({
+      where: {
+        ...owner,
+        status: 'DRAFT',
+        version: expectedVersion,
+        currentRevision: { fields: { some: {} } },
+      },
+      data: {
+        status: 'PENDING_REVIEW',
+        submittedAt: new Date(),
+        reviewerAssignmentId: null,
+        reviewedAt: null,
+        reviewComment: null,
+      },
+      select: { ...draftSelect, reviewerAssignmentId: true, submittedAt: true },
+    });
+
+    if (submitted) return { kind: 'submitted', data: submitted } as const;
+
+    const current = await this.database.formTemplate.findFirst({
+      where: owner,
+      select: {
+        status: true,
+        version: true,
+        currentRevision: { select: { _count: { select: { fields: true } } } },
+      },
+    });
+
+    if (!current) return { kind: 'not-found' } as const;
+    if (current.status !== 'DRAFT') return { kind: 'changed' } as const;
+    if (current.version !== expectedVersion) {
+      return {
+        kind: 'version-conflict',
+        currentVersion: current.version,
+      } as const;
+    }
+    if (current.currentRevision._count.fields === 0) {
+      return { kind: 'empty' } as const;
+    }
+
+    return { kind: 'changed' } as const;
+  }
+
+  private async reviewQueueWhere(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    actorAssignmentId: string,
+  ): Promise<Prisma.FormTemplateWhereInput | null> {
+    const grants = await this.authorization.findFormReviewGrants(
+      userId,
+      actorAssignmentId,
+      tx,
+    );
+    const [grant] = grants;
+    if (!grant) return null;
+
+    const where: Prisma.FormTemplateWhereInput = {
+      status: 'PENDING_REVIEW',
+      reviewerAssignmentId: null,
+      creator: { userId: { not: userId } },
+    };
+
+    if (grants.some(({ scopeType }) => scopeType === 'GLOBAL')) return where;
+
+    const [managedIds, unitIds] = await Promise.all([
+      collectBranchIds(actorAssignmentId, (ids) =>
+        tx.employeeAssignment.findMany({
+          where: { managerAssignmentId: { in: ids } },
+          select: { id: true },
+        }),
+      ),
+      collectBranchIds(grant.employeeAssignment.organizationalUnitId, (ids) =>
+        tx.organizationalUnit.findMany({
+          where: { parentId: { in: ids } },
+          select: { id: true },
+        }),
+      ),
+    ]);
+
+    return {
+      ...where,
+      createdByAssignmentId: { in: managedIds },
+      creator: {
+        userId: { not: userId },
+        organizationalUnitId: { in: unitIds },
+      },
+    };
+  }
+
+  listReviewQueue(userId: string, actorAssignmentId: string) {
+    return this.database.$transaction(
+      async (tx) => {
+        const where = await this.reviewQueueWhere(
+          tx,
+          userId,
+          actorAssignmentId,
+        );
+        if (!where) return null;
+
+        return tx.formTemplate.findMany({
+          where,
+          orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            code: true,
+            version: true,
+            submittedAt: true,
+            currentRevision: { select: { name: true } },
+          },
+        });
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
 
   private createRevision(
