@@ -28,6 +28,34 @@ const sessionLifetimeMs = 8 * 60 * 60 * 1000;
 export class AuthService {
   constructor(private readonly authRepository: AuthRepository) {}
 
+  async register(fullName: string, email: string, password: string) {
+    if (Buffer.byteLength(password, 'utf8') > 72) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'PASSWORD_TOO_LONG',
+        message: 'Mật khẩu không được vượt quá 72 byte',
+      });
+    }
+
+    const passwordHash = await hash(password, 10);
+
+    const user = await this.authRepository.createInactiveUser({
+      fullName,
+      email,
+      passwordHash,
+    });
+
+    if (!user) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'EMAIL_ALREADY_EXISTS',
+        message: 'Email đã được đăng ký',
+      });
+    }
+
+    return user;
+  }
+
   async login(email: string, password: string) {
     const user = await this.authRepository.findUserByEmail(email);
 
