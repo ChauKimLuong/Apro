@@ -5,5 +5,6 @@ import { DatabaseHealthController } from './database-health.controller';
 @Module({
   controllers: [DatabaseHealthController],
   providers: [DatabaseService],
+  exports: [DatabaseService],
 })
 export class DatabaseModule {}

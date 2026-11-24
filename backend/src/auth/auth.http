@@ -1,0 +1,96 @@
+# Khi REST Client hỏi mật khẩu, nhập SEED_USER_PASSWORD từ backend/.env.
+@baseUrl = http://localhost:3002
+
+### Tài khoản ACTIVE, mật khẩu đúng - 200
+# @prompt password Nhập SEED_USER_PASSWORD từ backend/.env
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "ACTIVE@example.test",
+  "password": "{{password}}"
+}
+
+### Đăng xuất phiên vừa login - 204
+# Chạy sau ca login ACTIVE đúng mật khẩu. Có thể giữ giá trị apro_session để chạy ca dùng lại token cũ bên dưới.
+POST {{baseUrl}}/auth/logout
+
+### Xem tài khoản sau đăng xuất - 401 INVALID_SESSION
+GET {{baseUrl}}/auth/me
+
+### Dùng lại token cũ đã thu hồi - 401 INVALID_SESSION
+# @no-cookie-jar
+# @prompt password Dán giá trị token cũ, chỉ phần sau apro_session=
+GET {{baseUrl}}/auth/me
+Cookie: apro_session={{password}}
+
+### Đăng xuất lần nữa khi thiếu cookie - 204
+# @no-cookie-jar
+POST {{baseUrl}}/auth/logout
+
+### Tài khoản ACTIVE, mật khẩu sai - 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "active@example.test",
+  "password": "intentionally-wrong-for-test"
+}
+
+### Tài khoản LOCKED, mật khẩu đúng - 403
+# @prompt password Nhập SEED_USER_PASSWORD từ backend/.env
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "locked@example.test",
+  "password": "{{password}}"
+}
+
+### Tài khoản LOCKED, mật khẩu sai - 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "locked@example.test",
+  "password": "intentionally-wrong-for-test"
+}
+
+### Email sai định dạng - 400
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "password": "validation-test-password"
+}
+
+### Thiếu mật khẩu - 400
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "active@example.test"
+}
+
+### Mật khẩu là số - 400
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "active@example.test",
+  "password": 123
+}
+
+### Xem tài khoản hiện tại bằng cookie phiên - 200
+# Chạy sau ca đăng nhập ACTIVE đúng mật khẩu. REST Client gửi lại cookie đã lưu.
+GET {{baseUrl}}/auth/me
+
+### Xem tài khoản hiện tại khi thiếu cookie - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/auth/me
+
+### Xem tài khoản hiện tại với token không tồn tại - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/auth/me
+Cookie: apro_session=token-khong-ton-tai

@@ -1,15 +1,19 @@
-const { randomBytes, scrypt } = require('node:crypto');
-const { promisify } = require('node:util');
+const { hash } = require('bcrypt');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('../dist/generated/prisma/client.js');
 
-const deriveKey = promisify(scrypt);
-
-async function hashPassword(password) {
-  const salt = randomBytes(16).toString('hex');
-  const key = await deriveKey(password, salt, 64);
-  return `${salt}:${key.toString('hex')}`;
-}
+const accounts = [
+  {
+    email: 'active@example.test',
+    fullName: 'Tài khoản test hoạt động',
+    status: 'ACTIVE',
+  },
+  {
+    email: 'locked@example.test',
+    fullName: 'Tài khoản test bị khóa',
+    status: 'LOCKED',
+  },
+];
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
@@ -18,8 +22,9 @@ async function main() {
   if (!connectionString) {
     throw new Error('Missing DATABASE_URL');
   }
-  if (!password || password.length < 12) {
-    throw new Error('SEED_USER_PASSWORD must have at least 12 characters');
+
+  if (!password || password.length < 12 || Buffer.byteLength(password, 'utf8') > 72) {
+    throw new Error('SEED_USER_PASSWORD must have at least 12 characters and at most 72 bytes');
   }
 
   const prisma = new PrismaClient({
@@ -27,25 +32,24 @@ async function main() {
   });
 
   try {
-    const { count } = await prisma.user.createMany({
-      data: [
-        {
-          fullName: 'Tài khoản test hoạt động',
-          email: 'active@example.test',
-          status: 'ACTIVE',
-          passwordHash: await hashPassword(password),
-        },
-        {
-          fullName: 'Tài khoản test bị khóa',
-          email: 'locked@example.test',
-          status: 'LOCKED',
-          passwordHash: await hashPassword(password),
-        },
-      ],
-      skipDuplicates: true,
-    });
+    const users = await Promise.all(
+      accounts.map(async (account) => ({
+        ...account,
+        passwordHash: await hash(password, 10),
+      })),
+    );
 
-    console.log(`Created ${count} test account(s).`);
+    await prisma.$transaction(
+      users.map((user) =>
+        prisma.user.upsert({
+          where: { email: user.email },
+          update: { passwordHash: user.passwordHash },
+          create: user,
+        }),
+      ),
+    );
+
+    console.log(`Prepared ${users.length} test accounts.`);
   } finally {
     await prisma.$disconnect();
   }
