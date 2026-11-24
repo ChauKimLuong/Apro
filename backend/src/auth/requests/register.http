@@ -1,0 +1,48 @@
+# Đổi registerTag trước khi chạy lại nhóm ca đăng ký trên cùng database.
+@baseUrl = http://localhost:3002
+@registerTag = 001
+@registerTestPassword = apro-register-2026!
+
+### Đăng ký tài khoản mới - 201 REGISTRATION_SUCCESS
+# @no-cookie-jar
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "  Nguyễn Văn Test  ",
+  "email": " Register+{{registerTag}}@example.test ",
+  "password": "{{registerTestPassword}}"
+}
+
+### Đăng ký trùng email với cách viết khác - 409 EMAIL_ALREADY_EXISTS
+# @no-cookie-jar
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Nguyễn Văn Test",
+  "email": "register+{{registerTag}}@EXAMPLE.TEST",
+  "password": "{{registerTestPassword}}"
+}
+
+### Gửi trạng thái ACTIVE khi đăng ký - 400 VALIDATION_ERROR
+# @no-cookie-jar
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Nguyễn Văn Test",
+  "email": "status-test@example.test",
+  "password": "{{registerTestPassword}}",
+  "status": "ACTIVE"
+}
+
+### Đăng nhập bằng tài khoản vừa đăng ký - 401 INVALID_CREDENTIALS
+# @no-cookie-jar
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "register+{{registerTag}}@example.test",
+  "password": "{{registerTestPassword}}"
+}

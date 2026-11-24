@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { Prisma } from '../generated/prisma/client';
+import { Prisma, type PasswordResetCode } from '../generated/prisma/client';
+
+type ResetCodeKey = Pick<PasswordResetCode, 'userId' | 'issuedAt' | 'codeHash'>;
 
 @Injectable()
 export class AuthRepository {
@@ -34,6 +36,95 @@ export class AuthRepository {
     });
   }
 
+  async savePasswordResetCode(data: {
+    userId: string;
+    codeHash: string;
+    issuedAt: Date;
+    expiresAt: Date;
+  }): Promise<boolean> {
+    const { userId, ...code } = data;
+    const resendBefore = new Date(code.issuedAt.getTime() - 60_000);
+
+    const updated = await this.database.passwordResetCode.updateMany({
+      where: { userId, issuedAt: { lte: resendBefore } },
+      data: { ...code, failedAttempts: 0, consumedAt: null },
+    });
+
+    if (updated.count === 1) {
+      return true;
+    }
+
+    const created = await this.database.passwordResetCode.createMany({
+      data,
+      skipDuplicates: true,
+    });
+
+    return created.count === 1;
+  }
+
+  findUsablePasswordResetCode(email: string) {
+    return this.database.passwordResetCode.findFirst({
+      where: {
+        ...usableResetCode(new Date()),
+        user: { email, status: 'ACTIVE' },
+      },
+      select: {
+        userId: true,
+        issuedAt: true,
+        codeHash: true,
+        user: { select: { passwordHash: true } },
+      },
+    });
+  }
+
+  async incrementPasswordResetAttempts({
+    userId,
+    issuedAt,
+    codeHash,
+  }: ResetCodeKey): Promise<void> {
+    await this.database.passwordResetCode.updateMany({
+      where: { userId, issuedAt, codeHash, ...usableResetCode(new Date()) },
+      data: { failedAttempts: { increment: 1 } },
+    });
+  }
+
+  async resetPasswordAndRevokeSessions(
+    { userId, issuedAt, codeHash }: ResetCodeKey,
+    expectedPasswordHash: string,
+    newPasswordHash: string,
+  ): Promise<boolean> {
+    return this.database.$transaction(async (tx) => {
+      // Lock the user first, in the same order as an authenticated change.
+      const user = await tx.user.updateMany({
+        where: {
+          id: userId,
+          status: 'ACTIVE',
+          passwordHash: expectedPasswordHash,
+        },
+        data: { passwordHash: expectedPasswordHash },
+      });
+      if (user.count === 0) {
+        return false;
+      }
+
+      const now = new Date();
+      const code = await tx.passwordResetCode.updateMany({
+        where: { userId, issuedAt, codeHash, ...usableResetCode(now) },
+        data: { consumedAt: now },
+      });
+      if (code.count === 0) {
+        return false;
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: newPasswordHash },
+      });
+      await tx.authSession.deleteMany({ where: { userId } });
+      return true;
+    });
+  }
+
   findPasswordByUserId(userId: string) {
     return this.database.user.findUnique({
       where: { id: userId },
@@ -60,6 +151,7 @@ export class AuthRepository {
         return false;
       }
 
+      await tx.passwordResetCode.deleteMany({ where: { userId } });
       await tx.authSession.deleteMany({ where: { userId } });
       return true;
     });
@@ -105,4 +197,12 @@ export class AuthRepository {
   async deleteSessionByTokenHash(tokenHash: string): Promise<void> {
     await this.database.authSession.deleteMany({ where: { tokenHash } });
   }
+}
+
+function usableResetCode(now: Date): Prisma.PasswordResetCodeWhereInput {
+  return {
+    consumedAt: null,
+    expiresAt: { gt: now },
+    failedAttempts: { lt: 5 },
+  };
 }

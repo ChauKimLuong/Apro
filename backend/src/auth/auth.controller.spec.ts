@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -6,7 +7,7 @@ import { AuthService } from './auth.service';
 jest.mock('./auth.service', () => ({ AuthService: class AuthService {} }));
 
 describe('AuthController', () => {
-  it('sets the session cookie and returns the public user', async () => {
+  it('sets the session cookie and returns the public user with a success message', async () => {
     const user = {
       id: 'test-user-id',
       email: 'active@example.test',
@@ -22,7 +23,10 @@ describe('AuthController', () => {
     const module = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [{ provide: AuthService, useValue: { login } }],
-    }).compile();
+    })
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     try {
       const controller = module.get(AuthController);
@@ -31,7 +35,11 @@ describe('AuthController', () => {
 
       await expect(
         controller.login({ email: user.email, password }, response),
-      ).resolves.toEqual(user);
+      ).resolves.toEqual({
+        ...user,
+        code: 'LOGIN_SUCCESS',
+        message: 'Đăng nhập thành công.',
+      });
       expect(login).toHaveBeenCalledWith(user.email, password);
       expect(cookie).toHaveBeenCalledWith(
         'apro_session',
