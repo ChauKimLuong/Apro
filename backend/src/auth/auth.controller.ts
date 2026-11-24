@@ -17,6 +17,7 @@ import {
   type AuthenticatedRequest,
 } from './auth-session';
 import { AuthService } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthSessionGuard } from './guards/auth-session.guard';
 
@@ -50,6 +51,23 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
     await this.authService.logout(readAuthSessionCookie(request));
+    response.clearCookie(AUTH_SESSION_COOKIE, getAuthSessionCookieOptions());
+  }
+
+  @Post('password')
+  @UseGuards(AuthSessionGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: ChangePasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    await this.authService.changePassword(
+      request.authUser.id,
+      body.currentPassword,
+      body.newPassword,
+    );
+
     response.clearCookie(AUTH_SESSION_COOKIE, getAuthSessionCookieOptions());
   }
 

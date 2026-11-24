@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { compare } from 'bcrypt';
+import { compare, hash } from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
 import type { AuthenticatedUser } from './auth-session';
 import { AuthRepository } from './auth.repository';
@@ -53,11 +55,14 @@ export class AuthService {
     const tokenHash = hashSessionToken(token);
     const expiresAt = new Date(Date.now() + sessionLifetimeMs);
 
-    await this.authRepository.createSession({
-      tokenHash,
-      userId: user.id,
-      expiresAt,
-    });
+    const sessionCreated = await this.authRepository.createSession(
+      { tokenHash, userId: user.id, expiresAt },
+      user.passwordHash,
+    );
+
+    if (!sessionCreated) {
+      throw new UnauthorizedException(invalidCredentials);
+    }
 
     return {
       user: {
@@ -68,6 +73,60 @@ export class AuthService {
       token,
       expiresAt,
     };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'PASSWORD_TOO_LONG',
+        message: 'Mật khẩu mới không được vượt quá 72 byte',
+      });
+    }
+
+    const user = await this.authRepository.findPasswordByUserId(userId);
+
+    if (!user || user.status !== 'ACTIVE') {
+      throw new UnauthorizedException(invalidSession);
+    }
+
+    if (
+      Buffer.byteLength(currentPassword, 'utf8') > 72 ||
+      !(await compare(currentPassword, user.passwordHash))
+    ) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'INVALID_CURRENT_PASSWORD',
+        message: 'Mật khẩu hiện tại không đúng',
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'PASSWORD_UNCHANGED',
+        message: 'Mật khẩu mới phải khác mật khẩu hiện tại',
+      });
+    }
+
+    const newPasswordHash = await hash(newPassword, 10);
+    const updated = await this.authRepository.updatePasswordAndRevokeSessions(
+      userId,
+      user.passwordHash,
+      newPasswordHash,
+    );
+
+    if (!updated) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'PASSWORD_CHANGE_CONFLICT',
+        message: 'Thông tin tài khoản đã thay đổi. Vui lòng đăng nhập lại',
+      });
+    }
   }
 
   async logout(token: unknown): Promise<void> {
