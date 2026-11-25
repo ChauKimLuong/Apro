@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { hash } from 'bcrypt';
 import { randomBytes } from 'node:crypto';
@@ -20,6 +21,58 @@ export class UsersService {
     private readonly users: UsersRepository,
     private readonly mail: MailService,
   ) {}
+
+  async listEmployees() {
+    const employees = await this.users.listEmployees(new Date());
+    return {
+      data: employees.map(({ assignments, ...employee }) => ({
+        ...employee,
+        primaryAssignment: assignments[0] ?? null,
+      })),
+    };
+  }
+
+  async getEmployee(id: string) {
+    const employee = await this.users.findEmployeeById(id, new Date());
+    if (!employee) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy tài khoản nhân viên',
+      });
+    }
+
+    return { data: employee };
+  }
+
+  async updateEmployeeStatus(id: string, status: 'ACTIVE' | 'LOCKED') {
+    const result = await this.users.updateEmployeeStatus(id, status);
+
+    if (result.kind === 'not-found') {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy tài khoản nhân viên',
+      });
+    }
+
+    if (result.kind === 'inactive') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'INVALID_USER_STATUS_TRANSITION',
+        message: 'Tài khoản chưa được kích hoạt',
+      });
+    }
+
+    return {
+      code: 'USER_STATUS_UPDATED',
+      message:
+        status === 'LOCKED'
+          ? 'Đã khóa tài khoản nhân viên'
+          : 'Đã mở khóa tài khoản nhân viên',
+      data: result.employee,
+    };
+  }
 
   getProvisioningOptions() {
     return this.users.listProvisioningOptions();

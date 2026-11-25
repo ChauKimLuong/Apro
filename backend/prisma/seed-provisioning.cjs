@@ -89,26 +89,31 @@ async function main() {
         });
       }
 
-      const permission = await tx.permission.upsert({
-        where: { code: 'USER_CREATE' },
-        update: {},
-        create: { code: 'USER_CREATE', name: 'Cấp tài khoản' },
-      });
       const role = await tx.systemRole.upsert({
         where: { code: 'SYSTEM_ADMIN' },
         update: {},
         create: { code: 'SYSTEM_ADMIN', name: 'Quản trị hệ thống' },
       });
-      const rolePermission = {
-        systemRoleId: role.id,
-        permissionId: permission.id,
-      };
-
-      await tx.rolePermission.upsert({
-        where: { systemRoleId_permissionId: rolePermission },
-        update: {},
-        create: rolePermission,
-      });
+      for (const data of [
+        { code: 'USER_CREATE', name: 'Cấp tài khoản' },
+        { code: 'USER_VIEW', name: 'Xem danh sách nhân viên' },
+        { code: 'USER_UPDATE', name: 'Cập nhật trạng thái tài khoản' },
+      ]) {
+        const permission = await tx.permission.upsert({
+          where: { code: data.code },
+          update: {},
+          create: data,
+        });
+        const rolePermission = {
+          systemRoleId: role.id,
+          permissionId: permission.id,
+        };
+        await tx.rolePermission.upsert({
+          where: { systemRoleId_permissionId: rolePermission },
+          update: {},
+          create: rolePermission,
+        });
+      }
       await tx.roleAssignment.upsert({
         where: { id: adminGrantId },
         update: {},
