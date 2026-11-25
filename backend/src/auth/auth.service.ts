@@ -37,6 +37,13 @@ const invalidResetCode = {
   message: 'Mã OTP không hợp lệ hoặc đã hết hạn',
 };
 
+const temporaryPasswordExpired = {
+  statusCode: 401,
+  code: 'TEMPORARY_PASSWORD_EXPIRED',
+  message:
+    'Mật khẩu tạm đã hết hạn. Vui lòng chọn Quên mật khẩu để đặt mật khẩu mới',
+};
+
 const sessionLifetimeMs = 8 * 60 * 60 * 1000;
 
 @Injectable()
@@ -100,9 +107,18 @@ export class AuthService {
       throw new UnauthorizedException(invalidCredentials);
     }
 
+    const now = Date.now();
+    const temporaryExpiry = user.temporaryPasswordExpiresAt?.getTime();
+    if (temporaryExpiry !== undefined && temporaryExpiry <= now) {
+      throw new UnauthorizedException(temporaryPasswordExpired);
+    }
+
     const token = randomBytes(32).toString('base64url');
     const tokenHash = hashSessionToken(token);
-    const expiresAt = new Date(Date.now() + sessionLifetimeMs);
+    const sessionExpiry = now + sessionLifetimeMs;
+    const expiresAt = new Date(
+      Math.min(sessionExpiry, temporaryExpiry ?? sessionExpiry),
+    );
 
     const sessionCreated = await this.authRepository.createSession(
       { tokenHash, userId: user.id, expiresAt },
@@ -114,11 +130,7 @@ export class AuthService {
     }
 
     return {
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-      },
+      user: toAuthenticatedUser(user),
       token,
       expiresAt,
     };
@@ -255,17 +267,31 @@ export class AuthService {
       hashSessionToken(token),
     );
 
+    const now = Date.now();
     if (
       !session ||
-      session.expiresAt.getTime() <= Date.now() ||
+      session.expiresAt.getTime() <= now ||
+      (session.user.temporaryPasswordExpiresAt?.getTime() ?? Infinity) <= now ||
       session.user.status !== 'ACTIVE'
     ) {
       throw new UnauthorizedException(invalidSession);
     }
 
-    const { id, email, fullName } = session.user;
-    return { id, email, fullName };
+    return toAuthenticatedUser(session.user);
   }
+}
+
+function toAuthenticatedUser({
+  id,
+  email,
+  fullName,
+  temporaryPasswordExpiresAt,
+}: Pick<AuthenticatedUser, 'id' | 'email' | 'fullName'> & {
+  temporaryPasswordExpiresAt: Date | null;
+}): AuthenticatedUser {
+  return temporaryPasswordExpiresAt
+    ? { id, email, fullName, mustChangePassword: true }
+    : { id, email, fullName };
 }
 
 function hashSessionToken(token: string): string {

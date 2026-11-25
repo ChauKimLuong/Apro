@@ -1,0 +1,66 @@
+@baseUrl = http://localhost:3002
+@unitId = 30000000-0000-4000-8000-000000000001
+@positionId = 40000000-0000-4000-8000-000000000001
+
+### Gửi yêu cầu cấp tài khoản khi chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "fullName": "Nguyễn Văn An",
+  "email": "nhan-vien-001@example.test",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{positionId}}"
+}
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member gửi yêu cầu cấp tài khoản - 403 MISSING_PERMISSION
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "fullName": "Nguyễn Văn An",
+  "email": "nhan-vien-001@example.test",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{positionId}}"
+}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Admin xem đơn vị và chức danh đang hoạt động - 200
+GET {{baseUrl}}/users/provisioning-options
+
+### Admin cấp tài khoản - 201 EMPLOYEE_ACCOUNT_CREATED
+# emailDelivery = SENT khi SMTP nhận thư chào mừng.
+# Lần chạy thứ hai với cùng email trả 409 EMAIL_ALREADY_EXISTS.
+# @prompt employeeEmail Nhập email nhân viên thử chưa có trong cơ sở dữ liệu
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "fullName": "Nguyễn Văn An",
+  "email": "{{employeeEmail}}",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{positionId}}"
+}
+
+### Đăng xuất phiên đang test - 200
+POST {{baseUrl}}/auth/logout

@@ -1,0 +1,45 @@
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+
+  @@map("user_status")
+}
+
+model User {
+  id                         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName                   String     @map("full_name")
+  email                      String     @unique(map: "ux_users_email")
+  status                     UserStatus @default(ACTIVE)
+  passwordHash               String     @map("password_hash")
+  temporaryPasswordExpiresAt DateTime?  @map("temporary_password_expires_at") @db.Timestamptz(3)
+
+  sessions          AuthSession[]
+  passwordResetCode PasswordResetCode?
+  assignments       EmployeeAssignment[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  tokenHash String   @id @map("token_hash")
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+model PasswordResetCode {
+  userId         String    @id @map("user_id") @db.Uuid
+  codeHash       String    @map("code_hash")
+  issuedAt       DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_codes")
+}

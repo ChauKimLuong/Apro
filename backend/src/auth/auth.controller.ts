@@ -12,6 +12,7 @@ import {
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import {
+  AllowTemporaryPassword,
   AUTH_SESSION_COOKIE,
   getAuthSessionCookieOptions,
   readAuthSessionCookie,
@@ -109,6 +110,7 @@ export class AuthController {
   }
 
   @Post('password')
+  @AllowTemporaryPassword()
   @UseGuards(AuthSessionGuard)
   @HttpCode(HttpStatus.OK)
   async changePassword(
@@ -131,6 +133,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @AllowTemporaryPassword()
   @UseGuards(AuthSessionGuard)
   me(@Req() request: AuthenticatedRequest) {
     return request.authUser;
