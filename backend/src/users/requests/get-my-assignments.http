@@ -1,0 +1,44 @@
+@baseUrl = http://localhost:3002
+@otherEmployeeId = 10000000-0000-4000-8000-000000000001
+# Chạy tuần tự với cookie jar trong REST Client. Dùng tài khoản từ hai script seed trên database test.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/users/me/assignments
+
+### Đăng nhập active - 200
+# @prompt activePassword Nhập mật khẩu hiện tại của active@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "active@example.test",
+  "password": "{{activePassword}}"
+}
+
+### Active chưa được phân công - 200
+# Dữ liệu seed tài khoản active cho kết quả { "data": [] }.
+GET {{baseUrl}}/users/me/assignments
+
+### Đăng xuất active - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member xem được phân công của mình - 200
+# Với seed phân quyền, data chứa phân công chính Nhân viên kiểm thử của member.
+GET {{baseUrl}}/users/me/assignments
+
+### Member thiếu quyền xem hồ sơ nhân viên khác - 403 MISSING_PERMISSION
+GET {{baseUrl}}/users/{{otherEmployeeId}}
+
+### Đăng xuất member - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout

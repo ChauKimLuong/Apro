@@ -1,0 +1,72 @@
+@baseUrl = http://localhost:3002
+# Chạy tuần tự trên database thử nghiệm đã seed và bật cookie jar trong REST Client.
+@employeeId = 10000000-0000-4000-8000-000000000002
+@emptyHistoryEmployeeId = 10000000-0000-4000-8000-000000000001
+@missingEmployeeId = 70000000-0000-4000-8000-000000000003
+@unitId = 30000000-0000-4000-8000-000000000001
+@warehousePositionId = 40000000-0000-4000-8000-000000000002
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu USER_VIEW - 403 MISSING_PERMISSION
+GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### ID sai định dạng - 400 INVALID_USER_ID
+GET {{baseUrl}}/users/khong-hop-le/assignments/history
+
+### Hồ sơ không tồn tại - 404 USER_NOT_FOUND
+GET {{baseUrl}}/users/{{missingEmployeeId}}/assignments/history
+
+### Tài khoản chưa có lịch sử - 200
+# Mặc định admin vừa seed chỉ có phân công chính đang hiệu lực. Kỳ vọng data: [].
+GET {{baseUrl}}/users/{{emptyHistoryEmployeeId}}/assignments/history
+
+### Tạo kiêm nhiệm Phụ trách kho để test - 201 CONCURRENT_ASSIGNMENT_CREATED
+# @name createWarehouseForHistory
+POST {{baseUrl}}/users/{{employeeId}}/assignments
+Content-Type: application/json
+
+{
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{warehousePositionId}}"
+}
+
+### Kiêm nhiệm đang hiệu lực chưa có trong lịch sử - 200
+# data chưa chứa ID vừa tạo.
+GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+
+### Kết thúc kiêm nhiệm vừa tạo - 200 CONCURRENT_ASSIGNMENT_ENDED
+PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createWarehouseForHistory.response.body.$.data.id}}/end
+
+### Lịch sử có Phụ trách kho kèm thời điểm kết thúc - 200
+# data[0].id khớp ID vừa tạo và data[0].endedAt có giá trị.
+GET {{baseUrl}}/users/{{employeeId}}/assignments/history
+
+### Hồ sơ vẫn giữ phân công chính đang hiệu lực - 200
+# data.assignments còn phân công chính và không chứa ID kiêm nhiệm vừa kết thúc.
+GET {{baseUrl}}/users/{{employeeId}}
+
+### Đăng xuất admin - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout
