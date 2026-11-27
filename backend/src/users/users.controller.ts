@@ -1,54 +1,24 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { UserCreateGuard } from '../authorization/guards/user-create.guard';
 import { UserUpdateGuard } from '../authorization/guards/user-update.guard';
-import { UserViewGuard } from '../authorization/guards/user-view.guard';
-import { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
-import { TransferAssignmentDto } from './dto/transfer-assignment.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { userIdPipe } from './pipes/resource-id.pipes';
 import { UsersService } from './users.service';
-
-const userIdPipe = new ParseUUIDPipe({
-  exceptionFactory: () =>
-    new BadRequestException({
-      statusCode: 400,
-      code: 'INVALID_USER_ID',
-      message: 'Vui lòng chọn lại tài khoản từ danh sách nhân viên.',
-    }),
-});
-
-const assignmentIdPipe = new ParseUUIDPipe({
-  exceptionFactory: () =>
-    new BadRequestException({
-      statusCode: 400,
-      code: 'INVALID_ASSIGNMENT_ID',
-      message: 'Vui lòng chọn lại phân công trong hồ sơ nhân viên.',
-    }),
-});
 
 @Controller('users')
 @UseGuards(AuthSessionGuard)
 export class UsersController {
   constructor(private readonly users: UsersService) {}
-
-  @Get()
-  @UseGuards(UserViewGuard)
-  listEmployees() {
-    return this.users.listEmployees();
-  }
 
   @Get('provisioning-options')
   @UseGuards(UserCreateGuard)
@@ -56,64 +26,13 @@ export class UsersController {
     return this.users.getProvisioningOptions();
   }
 
-  @Get('assignment-options')
-  @UseGuards(UserUpdateGuard)
-  getAssignmentOptions() {
-    return this.users.getProvisioningOptions();
-  }
-
-  @Get('me/assignments')
-  getMyAssignments(@Req() request: AuthenticatedRequest) {
-    return this.users.getMyAssignments(request.authUser.id);
-  }
-
-  @Get(':id')
-  @UseGuards(UserViewGuard)
-  getEmployee(@Param('id', userIdPipe) id: string) {
-    return this.users.getEmployee(id);
-  }
-
-  @Get(':userId/assignments/history')
-  @UseGuards(UserViewGuard)
-  getAssignmentHistory(@Param('userId', userIdPipe) userId: string) {
-    return this.users.getAssignmentHistory(userId);
-  }
-
-  @Post(':id/assignments')
-  @UseGuards(UserUpdateGuard)
-  createConcurrentAssignment(
-    @Param('id', userIdPipe) id: string,
-    @Body() body: CreateConcurrentAssignmentDto,
-  ) {
-    return this.users.createConcurrentAssignment(id, body);
-  }
-
-  @Patch(':userId/assignments/:assignmentId/end')
-  @UseGuards(UserUpdateGuard)
-  endConcurrentAssignment(
-    @Param('userId', userIdPipe) userId: string,
-    @Param('assignmentId', assignmentIdPipe) assignmentId: string,
-  ) {
-    return this.users.endConcurrentAssignment(userId, assignmentId);
-  }
-
-  @Patch(':userId/assignments/:assignmentId/transfer')
-  @UseGuards(UserUpdateGuard)
-  transferAssignment(
-    @Param('userId', userIdPipe) userId: string,
-    @Param('assignmentId', assignmentIdPipe) assignmentId: string,
-    @Body() body: TransferAssignmentDto,
-  ) {
-    return this.users.transferAssignment(userId, assignmentId, body);
-  }
-
-  @Patch(':id/status')
+  @Patch(':userId/status')
   @UseGuards(UserUpdateGuard)
   updateEmployeeStatus(
-    @Param('id', userIdPipe) id: string,
+    @Param('userId', userIdPipe) userId: string,
     @Body() body: UpdateUserStatusDto,
   ) {
-    return this.users.updateEmployeeStatus(id, body.status);
+    return this.users.updateEmployeeStatus(userId, body.status);
   }
 
   @Post()

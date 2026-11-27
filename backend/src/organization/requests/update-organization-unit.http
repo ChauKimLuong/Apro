@@ -1,4 +1,6 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @originalParentId = 30000000-0000-4000-8000-000000000001
 @missingUnitId = 70000000-0000-4000-8000-000000000001
 # Điền ID của một đơn vị INACTIVE trên database thử nghiệm.
@@ -26,6 +28,7 @@ Content-Type: application/json
 
 ### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
 PATCH {{baseUrl}}/organization/units/{{originalParentId}}
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -45,6 +48,7 @@ Content-Type: application/json
 ### Tạo công ty đích để chuyển cha - 201 ORGANIZATION_UNIT_CREATED
 # @name createNewParent
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -55,6 +59,7 @@ Content-Type: application/json
 ### Tạo Phòng Kế toán dưới công ty hiện tại - 201 ORGANIZATION_UNIT_CREATED
 # @name createDepartment
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -66,6 +71,7 @@ Content-Type: application/json
 ### Tạo Khối Công nghệ dưới công ty đích - 201 ORGANIZATION_UNIT_CREATED
 # @name createTechnologyDivision
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -76,6 +82,7 @@ Content-Type: application/json
 
 ### Đổi Công ty có Khối trực thuộc thành Phòng ban - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
 PATCH {{baseUrl}}/organization/units/{{createNewParent.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -84,6 +91,7 @@ Content-Type: application/json
 
 ### Đổi loại và cha cùng lúc nhưng cùng cấp - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -94,6 +102,7 @@ Content-Type: application/json
 ### Tạo Nhóm Đối soát trong Phòng Kế toán - 201 ORGANIZATION_UNIT_CREATED
 # @name createTeam
 POST {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -104,6 +113,7 @@ Content-Type: application/json
 
 ### Đổi tên phòng và giữ nguyên cha - 200 ORGANIZATION_UNIT_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -112,6 +122,7 @@ Content-Type: application/json
 
 ### Chuyển phòng sang công ty khác - 200 ORGANIZATION_UNIT_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -120,6 +131,7 @@ Content-Type: application/json
 
 ### Chọn chính đơn vị làm cha - 409 ORGANIZATION_UNIT_CYCLE
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -128,6 +140,7 @@ Content-Type: application/json
 
 ### Chọn đơn vị con làm cha - 409 ORGANIZATION_UNIT_CYCLE
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -136,6 +149,7 @@ Content-Type: application/json
 
 ### Chọn đơn vị cha đã ngừng hoạt động - 400 INVALID_PARENT_UNIT
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -144,6 +158,7 @@ Content-Type: application/json
 
 ### Đưa phòng lên gốc - 200 ORGANIZATION_UNIT_UPDATED
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -153,15 +168,18 @@ Content-Type: application/json
 ### Đọc lại cây sau khi cập nhật - 200
 # Phòng đã lên gốc, Nhóm Đối soát vẫn thuộc phòng, Công ty còn giữ nguyên loại và Khối trực thuộc.
 GET {{baseUrl}}/organization/units
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Body rỗng - 400 EMPTY_ORGANIZATION_UNIT_UPDATE
 PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {}
 
 ### ID sai định dạng - 400 INVALID_ORGANIZATION_UNIT_ID
 PATCH {{baseUrl}}/organization/units/id-khong-hop-le
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -170,6 +188,7 @@ Content-Type: application/json
 
 ### Đơn vị không tồn tại - 404 ORGANIZATION_UNIT_NOT_FOUND
 PATCH {{baseUrl}}/organization/units/{{missingUnitId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {

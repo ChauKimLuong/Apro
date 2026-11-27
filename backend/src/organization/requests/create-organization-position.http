@@ -1,0 +1,78 @@
+@baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
+# Chạy tuần tự với cookie jar của REST Client trên database thử nghiệm.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+POST {{baseUrl}}/organization/positions
+Content-Type: application/json
+
+{
+  "name": "Kế toán trưởng",
+  "type": "MANAGER"
+}
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "Kế toán trưởng",
+  "type": "MANAGER"
+}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Admin tạo Kế toán trưởng - 201 ORGANIZATION_POSITION_CREATED
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "  Kế toán trưởng  ",
+  "type": "MANAGER"
+}
+
+### Chức danh vừa tạo có trạng thái ACTIVE - 200
+GET {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+
+### Tên toàn khoảng trắng - 400 VALIDATION_ERROR
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "   ",
+  "type": "MANAGER"
+}
+
+### Loại chức danh sai - 400 VALIDATION_ERROR
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "Kế toán trưởng",
+  "type": "UNKNOWN"
+}

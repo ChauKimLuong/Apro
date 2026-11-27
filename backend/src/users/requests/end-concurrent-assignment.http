@@ -1,14 +1,16 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 # Dùng tài khoản và ID từ seed phân quyền. Chạy tuần tự với cookie jar của REST Client.
 @employeeId = 10000000-0000-4000-8000-000000000002
-@otherEmployeeId = 10000000-0000-4000-8000-000000000001
+@missingAssignmentId = 70000000-0000-4000-8000-000000000004
 @primaryAssignmentId = 20000000-0000-4000-8000-000000000002
 @unitId = 30000000-0000-4000-8000-000000000001
 @warehousePositionId = 40000000-0000-4000-8000-000000000002
 
 ### Chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/end
+PATCH {{baseUrl}}/employee-assignments/{{primaryAssignmentId}}/end
 
 ### Đăng nhập member - 200
 # @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
@@ -21,7 +23,8 @@ Content-Type: application/json
 }
 
 ### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/end
+PATCH {{baseUrl}}/employee-assignments/{{primaryAssignmentId}}/end
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng nhập admin - 200
 # @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
@@ -35,34 +38,43 @@ Content-Type: application/json
 
 ### Tạo kiêm nhiệm Phụ trách kho để test - 201 CONCURRENT_ASSIGNMENT_CREATED
 # @name createWarehouseAssignment
-POST {{baseUrl}}/users/{{employeeId}}/assignments
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
+  "userId": "{{employeeId}}",
   "organizationalUnitId": "{{unitId}}",
   "positionId": "{{warehousePositionId}}"
 }
 
 ### Kiểm tra có cả phân công chính và kiêm nhiệm vừa tạo - 200
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### ID phân công sai định dạng - 400 INVALID_ASSIGNMENT_ID
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/khong-hop-le/end
+PATCH {{baseUrl}}/employee-assignments/khong-hop-le/end
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
-### ID hợp lệ nhưng thuộc hồ sơ khác - 404 ASSIGNMENT_NOT_FOUND
-PATCH {{baseUrl}}/users/{{otherEmployeeId}}/assignments/{{createWarehouseAssignment.response.body.$.data.id}}/end
+### ID hợp lệ nhưng phân công không tồn tại - 404 ASSIGNMENT_NOT_FOUND
+PATCH {{baseUrl}}/employee-assignments/{{missingAssignmentId}}/end
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Yêu cầu kết thúc phân công chính - 409 ASSIGNMENT_CANNOT_END
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{primaryAssignmentId}}/end
+PATCH {{baseUrl}}/employee-assignments/{{primaryAssignmentId}}/end
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Kết thúc đúng kiêm nhiệm vừa tạo - 200 CONCURRENT_ASSIGNMENT_ENDED
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createWarehouseAssignment.response.body.$.data.id}}/end
+PATCH {{baseUrl}}/employee-assignments/{{createWarehouseAssignment.response.body.$.data.id}}/end
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Hồ sơ giữ phân công chính và bỏ kiêm nhiệm vừa kết thúc - 200
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Gửi lại yêu cầu đã thành công - 409 ASSIGNMENT_NOT_ACTIVE
-PATCH {{baseUrl}}/users/{{employeeId}}/assignments/{{createWarehouseAssignment.response.body.$.data.id}}/end
+PATCH {{baseUrl}}/employee-assignments/{{createWarehouseAssignment.response.body.$.data.id}}/end
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất admin - 200 LOGOUT_SUCCESS
 POST {{baseUrl}}/auth/logout

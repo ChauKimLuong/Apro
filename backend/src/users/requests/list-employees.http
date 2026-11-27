@@ -1,8 +1,10 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 
 ### Xem danh sách khi chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
-GET {{baseUrl}}/users
+GET {{baseUrl}}/employees
 
 ### Đăng nhập member - 200
 # @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
@@ -15,7 +17,8 @@ Content-Type: application/json
 }
 
 ### Member thiếu USER_VIEW - 403 MISSING_PERMISSION
-GET {{baseUrl}}/users
+GET {{baseUrl}}/employees
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng nhập admin - 200
 # @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
@@ -29,7 +32,8 @@ Content-Type: application/json
 
 ### Admin xem danh sách - 200
 # Để xem tài khoản vừa cấp, chạy ca POST trong create-employee.http trước.
-GET {{baseUrl}}/users
+GET {{baseUrl}}/employees
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất phiên vừa dùng - 200
 POST {{baseUrl}}/auth/logout

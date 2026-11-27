@@ -12,7 +12,9 @@ import {
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
 import { OrganizationManageGuard } from '../authorization/guards/organization-manage.guard';
 import { OrganizationViewGuard } from '../authorization/guards/organization-view.guard';
+import { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
+import { UpdateOrganizationPositionDto } from './dto/update-organization-position.dto';
 import { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { UpdateOrganizationUnitStatusDto } from './dto/update-organization-unit-status.dto';
 import { OrganizationService } from './organization.service';
@@ -24,6 +26,16 @@ const unitIdPipe = new ParseUUIDPipe({
       statusCode: 400,
       code: 'INVALID_ORGANIZATION_UNIT_ID',
       message: 'Vui lòng chọn lại đơn vị cần chỉnh sửa.',
+    }),
+});
+
+const positionIdPipe = new ParseUUIDPipe({
+  version: '4',
+  exceptionFactory: () =>
+    new BadRequestException({
+      statusCode: 400,
+      code: 'INVALID_ORGANIZATION_POSITION_ID',
+      message: 'Vui lòng chọn lại chức danh cần chỉnh sửa.',
     }),
 });
 
@@ -66,5 +78,20 @@ export class OrganizationController {
   @UseGuards(OrganizationViewGuard)
   listPositions() {
     return this.organization.listPositions();
+  }
+
+  @Post('positions')
+  @UseGuards(OrganizationManageGuard)
+  createPosition(@Body() body: CreateOrganizationPositionDto) {
+    return this.organization.createPosition(body);
+  }
+
+  @Patch('positions/:id')
+  @UseGuards(OrganizationManageGuard)
+  updatePosition(
+    @Param('id', positionIdPipe) id: string,
+    @Body() body: UpdateOrganizationPositionDto,
+  ) {
+    return this.organization.updatePosition(id, body);
   }
 }

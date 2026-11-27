@@ -1,0 +1,81 @@
+@baseUrl = http://localhost:3002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
+@unitId = 30000000-0000-4000-8000-000000000001
+@primaryPositionId = 40000000-0000-4000-8000-000000000001
+@concurrentPositionId = 40000000-0000-4000-8000-000000000002
+# Chạy tuần tự với cookie jar trên DB kiểm thử. Dùng active@example.test chưa có phân công chính.
+
+### Lấy ID tài khoản nhận phân công - 200
+# @name employeeLogin
+# @prompt employeePassword Nhập mật khẩu hiện tại của active@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "active@example.test",
+  "password": "{{employeePassword}}"
+}
+
+### Đăng xuất tài khoản nhận phân công - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Chưa có phân công chính - 409 PRIMARY_ASSIGNMENT_REQUIRED
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{employeeLogin.response.body.$.id}}",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{concurrentPositionId}}"
+}
+
+### Gán phân công chính lần đầu - 201 PRIMARY_ASSIGNMENT_CREATED
+POST {{baseUrl}}/employee-assignments/primary
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{employeeLogin.response.body.$.id}}",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{primaryPositionId}}"
+}
+
+### Gán phân công chính lần nữa - 409 PRIMARY_ASSIGNMENT_EXISTS
+POST {{baseUrl}}/employee-assignments/primary
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{employeeLogin.response.body.$.id}}",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{concurrentPositionId}}"
+}
+
+### Thêm kiêm nhiệm sau khi đã gán chính - 201 CONCURRENT_ASSIGNMENT_CREATED
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{employeeLogin.response.body.$.id}}",
+  "organizationalUnitId": "{{unitId}}",
+  "positionId": "{{concurrentPositionId}}"
+}
+
+### Hồ sơ có cả phân công chính và kiêm nhiệm - 200
+GET {{baseUrl}}/employees/{{employeeLogin.response.body.$.id}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
+
+### Đăng xuất admin - 200
+POST {{baseUrl}}/auth/logout

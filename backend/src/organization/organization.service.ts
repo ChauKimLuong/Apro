@@ -8,7 +8,9 @@ import type {
   OrganizationalUnitStatus,
   OrganizationalUnitType,
 } from '../generated/prisma/client';
+import type { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import type { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
+import type { UpdateOrganizationPositionDto } from './dto/update-organization-position.dto';
 import type { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { OrganizationRepository } from './organization.repository';
 
@@ -145,5 +147,58 @@ export class OrganizationService {
 
   async listPositions() {
     return { data: await this.organization.listPositions() };
+  }
+
+  async createPosition(dto: CreateOrganizationPositionDto) {
+    const position = await this.organization.createPosition(dto);
+
+    return {
+      code: 'ORGANIZATION_POSITION_CREATED',
+      message: 'Đã tạo chức danh.',
+      data: position,
+    };
+  }
+
+  async updatePosition(id: string, dto: UpdateOrganizationPositionDto) {
+    if (dto.name === undefined && dto.type === undefined) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'EMPTY_ORGANIZATION_POSITION_UPDATE',
+        message: 'Vui lòng nhập thông tin chức danh cần chỉnh sửa.',
+      });
+    }
+
+    const result = await this.organization.updatePosition(id, dto);
+
+    if (result.kind === 'not-found') {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'ORGANIZATION_POSITION_NOT_FOUND',
+        message: 'Không tìm thấy chức danh.',
+      });
+    }
+
+    if (result.kind === 'has-acting-assignment') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'ORGANIZATION_POSITION_HAS_ACTING_ASSIGNMENTS',
+        message:
+          'Vui lòng xử lý phân công tạm quyền trước khi đổi sang loại Nhân viên.',
+      });
+    }
+
+    if (result.kind === 'changed') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'ORGANIZATION_POSITION_CHANGED',
+        message: 'Dữ liệu chức danh vừa thay đổi. Vui lòng tải lại và thử lại.',
+      });
+    }
+
+    return {
+      code: 'ORGANIZATION_POSITION_UPDATED',
+      message: 'Đã cập nhật chức danh.',
+      data: result.position,
+    };
   }
 }

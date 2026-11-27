@@ -1,5 +1,7 @@
 # Chạy từ trên xuống với admin và member của seed phân quyền trên database local.
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @memberId = 10000000-0000-4000-8000-000000000002
 
 ### Chưa đăng nhập - 401 INVALID_SESSION
@@ -24,6 +26,7 @@ Content-Type: application/json
 
 ### Member thiếu USER_UPDATE - 403 MISSING_PERMISSION
 PATCH {{baseUrl}}/users/{{memberId}}/status
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -42,6 +45,7 @@ Content-Type: application/json
 
 ### Admin khóa member - 200 USER_STATUS_UPDATED
 PATCH {{baseUrl}}/users/{{memberId}}/status
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 Content-Type: application/json
 
 {
@@ -67,6 +71,7 @@ Content-Type: application/json
 
 ### Admin mở khóa member - 200 USER_STATUS_UPDATED
 PATCH {{baseUrl}}/users/{{memberId}}/status
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 Content-Type: application/json
 
 {

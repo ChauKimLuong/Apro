@@ -1,10 +1,12 @@
 @baseUrl = http://localhost:3002
+@memberActorAssignmentId = 20000000-0000-4000-8000-000000000002
+@adminActorAssignmentId = 20000000-0000-4000-8000-000000000001
 @employeeId = 10000000-0000-4000-8000-000000000002
 @missingEmployeeId = 70000000-0000-4000-8000-000000000003
 
 ### Chưa đăng nhập - 401 INVALID_SESSION
 # @no-cookie-jar
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
 
 ### Đăng nhập member - 200
 # @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
@@ -17,7 +19,8 @@ Content-Type: application/json
 }
 
 ### Member thiếu USER_VIEW - 403 MISSING_PERMISSION
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
+X-Employee-Assignment-Id: {{memberActorAssignmentId}}
 
 ### Đăng nhập admin - 200
 # @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
@@ -32,16 +35,20 @@ Content-Type: application/json
 ### Tài khoản tồn tại - 200
 # data.assignments chứa mọi phân công đang hiệu lực, phân công chính đứng đầu.
 # Với tài khoản chưa có phân công đang hiệu lực, data.assignments là [].
-GET {{baseUrl}}/users/{{employeeId}}
+GET {{baseUrl}}/employees/{{employeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### ID sai định dạng - 400 INVALID_USER_ID
-GET {{baseUrl}}/users/not-a-uuid
+GET {{baseUrl}}/employees/not-a-uuid
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### UUID hợp lệ nhưng không có tài khoản - 404 USER_NOT_FOUND
-GET {{baseUrl}}/users/{{missingEmployeeId}}
+GET {{baseUrl}}/employees/{{missingEmployeeId}}
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Lấy dữ liệu dùng khi cấp tài khoản - 200
 GET {{baseUrl}}/users/provisioning-options
+X-Employee-Assignment-Id: {{adminActorAssignmentId}}
 
 ### Đăng xuất phiên vừa dùng - 200
 POST {{baseUrl}}/auth/logout
