@@ -1,0 +1,120 @@
+@baseUrl = http://localhost:3002
+@missingParentId = 70000000-0000-4000-8000-000000000001
+# Đổi thành ID của một đơn vị INACTIVE trên database thử nghiệm.
+@inactiveParentId = 70000000-0000-4000-8000-000000000002
+# Chạy tuần tự với cookie jar của REST Client trên database thử nghiệm.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Công ty",
+  "type": "COMPANY"
+}
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Đơn vị member không tạo được",
+  "type": "TEAM"
+}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Admin tạo đơn vị gốc - 201 ORGANIZATION_UNIT_CREATED
+# @name createCompany
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Công ty",
+  "type": "COMPANY"
+}
+
+### Admin tạo Phòng Kế toán dưới Công ty - 201 ORGANIZATION_UNIT_CREATED
+# @name createAccountingDepartment
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "  Phòng Kế toán  ",
+  "type": "DEPARTMENT",
+  "parentId": "{{createCompany.response.body.$.data.id}}"
+}
+
+### Xem lại cây đơn vị - 200
+GET {{baseUrl}}/organization/units
+
+### Tên toàn khoảng trắng - 400 VALIDATION_ERROR
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "   ",
+  "type": "COMPANY"
+}
+
+### Đơn vị cha không tồn tại - 400 INVALID_PARENT_UNIT
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Đơn vị có cha không tồn tại",
+  "type": "TEAM",
+  "parentId": "{{missingParentId}}"
+}
+
+### Đơn vị cha đã ngừng hoạt động - 400 INVALID_PARENT_UNIT
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Đơn vị có cha đã ngừng hoạt động",
+  "type": "TEAM",
+  "parentId": "{{inactiveParentId}}"
+}
+
+### Chọn cha cùng cấp - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Công ty không thể nằm dưới Công ty",
+  "type": "COMPANY",
+  "parentId": "{{createCompany.response.body.$.data.id}}"
+}
+
+### Chọn Phòng ban làm cha của Khối - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Khối không thể nằm dưới Phòng ban",
+  "type": "DIVISION",
+  "parentId": "{{createAccountingDepartment.response.body.$.data.id}}"
+}
+
+### Đăng xuất admin - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout

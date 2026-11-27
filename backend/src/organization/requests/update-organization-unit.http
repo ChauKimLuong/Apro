@@ -1,0 +1,180 @@
+@baseUrl = http://localhost:3002
+@originalParentId = 30000000-0000-4000-8000-000000000001
+@missingUnitId = 70000000-0000-4000-8000-000000000001
+# Điền ID của một đơn vị INACTIVE trên database thử nghiệm.
+@inactiveParentId = 70000000-0000-4000-8000-000000000002
+# Chạy tuần tự với cookie jar của REST Client. Các POST bên dưới tạo dữ liệu thử.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+PATCH {{baseUrl}}/organization/units/{{originalParentId}}
+Content-Type: application/json
+
+{
+  "name": "Tên không được lưu khi chưa đăng nhập"
+}
+
+### Đăng nhập member - 200
+# @prompt memberPassword Nhập mật khẩu hiện tại của member@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": "{{memberPassword}}"
+}
+
+### Member thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/organization/units/{{originalParentId}}
+Content-Type: application/json
+
+{
+  "name": "Tên không được lưu khi thiếu quyền"
+}
+
+### Đăng nhập admin - 200
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Tạo công ty đích để chuyển cha - 201 ORGANIZATION_UNIT_CREATED
+# @name createNewParent
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Công ty thử chuyển đơn vị",
+  "type": "COMPANY"
+}
+
+### Tạo Phòng Kế toán dưới công ty hiện tại - 201 ORGANIZATION_UNIT_CREATED
+# @name createDepartment
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Phòng Kế toán",
+  "type": "DEPARTMENT",
+  "parentId": "{{originalParentId}}"
+}
+
+### Tạo Khối Công nghệ dưới công ty đích - 201 ORGANIZATION_UNIT_CREATED
+# @name createTechnologyDivision
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Khối Công nghệ",
+  "type": "DIVISION",
+  "parentId": "{{createNewParent.response.body.$.data.id}}"
+}
+
+### Đổi Công ty có Khối trực thuộc thành Phòng ban - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+PATCH {{baseUrl}}/organization/units/{{createNewParent.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "type": "DEPARTMENT"
+}
+
+### Đổi loại và cha cùng lúc nhưng cùng cấp - 409 ORGANIZATION_UNIT_TYPE_CONFLICT
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "type": "DIVISION",
+  "parentId": "{{createTechnologyDivision.response.body.$.data.id}}"
+}
+
+### Tạo Nhóm Đối soát trong Phòng Kế toán - 201 ORGANIZATION_UNIT_CREATED
+# @name createTeam
+POST {{baseUrl}}/organization/units
+Content-Type: application/json
+
+{
+  "name": "Nhóm Đối soát",
+  "type": "TEAM",
+  "parentId": "{{createDepartment.response.body.$.data.id}}"
+}
+
+### Đổi tên phòng và giữ nguyên cha - 200 ORGANIZATION_UNIT_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "name": "  Phòng Tài chính Kế toán  "
+}
+
+### Chuyển phòng sang công ty khác - 200 ORGANIZATION_UNIT_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "parentId": "{{createNewParent.response.body.$.data.id}}"
+}
+
+### Chọn chính đơn vị làm cha - 409 ORGANIZATION_UNIT_CYCLE
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "parentId": "{{createDepartment.response.body.$.data.id}}"
+}
+
+### Chọn đơn vị con làm cha - 409 ORGANIZATION_UNIT_CYCLE
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "parentId": "{{createTeam.response.body.$.data.id}}"
+}
+
+### Chọn đơn vị cha đã ngừng hoạt động - 400 INVALID_PARENT_UNIT
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "parentId": "{{inactiveParentId}}"
+}
+
+### Đưa phòng lên gốc - 200 ORGANIZATION_UNIT_UPDATED
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{
+  "parentId": null
+}
+
+### Đọc lại cây sau khi cập nhật - 200
+# Phòng đã lên gốc, Nhóm Đối soát vẫn thuộc phòng, Công ty còn giữ nguyên loại và Khối trực thuộc.
+GET {{baseUrl}}/organization/units
+
+### Body rỗng - 400 EMPTY_ORGANIZATION_UNIT_UPDATE
+PATCH {{baseUrl}}/organization/units/{{createDepartment.response.body.$.data.id}}
+Content-Type: application/json
+
+{}
+
+### ID sai định dạng - 400 INVALID_ORGANIZATION_UNIT_ID
+PATCH {{baseUrl}}/organization/units/id-khong-hop-le
+Content-Type: application/json
+
+{
+  "name": "Tên thử"
+}
+
+### Đơn vị không tồn tại - 404 ORGANIZATION_UNIT_NOT_FOUND
+PATCH {{baseUrl}}/organization/units/{{missingUnitId}}
+Content-Type: application/json
+
+{
+  "name": "Tên thử"
+}
+
+### Đăng xuất admin - 200 LOGOUT_SUCCESS
+POST {{baseUrl}}/auth/logout
