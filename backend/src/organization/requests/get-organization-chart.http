@@ -1,0 +1,72 @@
+@baseUrl = http://localhost:3003
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+@quangEmployeeId = 10000000-0000-4000-8000-000000000103
+@itDepartmentId = 30000000-0000-4000-8000-000000000103
+@headOfDepartmentPositionId = 40000000-0000-4000-8000-000000000104
+# Chạy tuần tự trên DB kiểm thử đã seed Công ty A. Hai ca POST/PATCH tạo rồi kết thúc kiêm nhiệm của Quang.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+GET {{baseUrl}}/organization/chart
+
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
+}
+
+### Chi thiếu quyền xem sơ đồ - 403 MISSING_PERMISSION
+GET {{baseUrl}}/organization/chart
+X-Employee-Assignment-Id: {{chiAssignmentId}}
+
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### Chi và Quang nằm trực tiếp trong Khối Công nghệ - 200
+# Phòng CNTT nằm trong children của Khối Công nghệ. Chi và Quang hiện trực tiếp ở members của Khối.
+GET {{baseUrl}}/organization/chart
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Thêm Quang kiêm Trưởng phòng CNTT - 201 CONCURRENT_ASSIGNMENT_CREATED
+# @name addChartConcurrentAssignment
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{quangEmployeeId}}",
+  "organizationalUnitId": "{{itDepartmentId}}",
+  "positionId": "{{headOfDepartmentPositionId}}"
+}
+
+### Quang hiện ở cả Khối Công nghệ và Phòng CNTT - 200
+# Phân công của Quang ở Phòng CNTT có type CONCURRENT. Phân công Giám đốc khối vẫn nằm ở Khối.
+GET {{baseUrl}}/organization/chart
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Kết thúc kiêm nhiệm của Quang - 200 CONCURRENT_ASSIGNMENT_ENDED
+PATCH {{baseUrl}}/employee-assignments/{{addChartConcurrentAssignment.response.body.$.data.id}}/end
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Kiêm nhiệm đã kết thúc biến mất khỏi sơ đồ - 200
+# Quang vẫn hiện trong Khối Công nghệ. Phòng CNTT hiện Dũng, Hà và Minh.
+GET {{baseUrl}}/organization/chart
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout

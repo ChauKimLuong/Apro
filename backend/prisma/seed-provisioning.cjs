@@ -26,9 +26,40 @@ const positionId = '40000000-0000-4000-8000-000000000001';
 const warehousePositionId = '40000000-0000-4000-8000-000000000002';
 const adminGrantId = '50000000-0000-4000-8000-000000000001';
 
+async function seedSystemAdmin(tx) {
+  const role = await tx.systemRole.upsert({
+    where: { code: 'SYSTEM_ADMIN' },
+    update: {},
+    create: { code: 'SYSTEM_ADMIN', name: 'Quản trị hệ thống' },
+  });
+  for (const data of [
+    { code: 'USER_CREATE', name: 'Cấp tài khoản' },
+    { code: 'USER_VIEW', name: 'Xem danh sách nhân viên' },
+    { code: 'USER_UPDATE', name: 'Cập nhật trạng thái tài khoản' },
+    { code: 'ORGANIZATION_VIEW', name: 'Xem cơ cấu tổ chức' },
+    { code: 'ORGANIZATION_MANAGE', name: 'Quản lý cơ cấu tổ chức' },
+    { code: 'ROLE_ASSIGN', name: 'Quản lý vai trò' },
+  ]) {
+    const permission = await tx.permission.upsert({
+      where: { code: data.code },
+      update: {},
+      create: data,
+    });
+    const rolePermission = {
+      systemRoleId: role.id,
+      permissionId: permission.id,
+    };
+    await tx.rolePermission.upsert({
+      where: { systemRoleId_permissionId: rolePermission },
+      update: {},
+      create: rolePermission,
+    });
+  }
+  return role;
+}
+
 async function main() {
   const connectionString = process.env.DATABASE_URL;
-  const password = process.env.SEED_PROVISIONING_PASSWORD;
   const localHosts = ['localhost', '127.0.0.1', '[::1]'];
 
   if (
@@ -38,30 +69,38 @@ async function main() {
     throw new Error('Seed phân quyền chỉ dùng với PostgreSQL local');
   }
 
-  if (
-    !password ||
-    password.length < 12 ||
-    Buffer.byteLength(password, 'utf8') > 72
-  ) {
-    throw new Error(
-      'SEED_PROVISIONING_PASSWORD cần ít nhất 12 ký tự và tối đa 72 byte',
-    );
-  }
-
-  const users = await Promise.all(
-    accounts.map(async (account) => ({
-      ...account,
-      passwordHash: await hash(password, 10),
-    })),
-  );
-  const [admin] = users;
-  const organizationExample = await prepareOrganizationExample(password);
-  const effectiveFrom = new Date();
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString }),
   });
 
   try {
+    if (process.argv.includes('--permissions-only')) {
+      await prisma.$transaction(seedSystemAdmin);
+      console.log('Đã cập nhật quyền cho SYSTEM_ADMIN.');
+      return;
+    }
+
+    const password = process.env.SEED_PROVISIONING_PASSWORD;
+    if (
+      !password ||
+      password.length < 12 ||
+      Buffer.byteLength(password, 'utf8') > 72
+    ) {
+      throw new Error(
+        'SEED_PROVISIONING_PASSWORD cần ít nhất 12 ký tự và tối đa 72 byte',
+      );
+    }
+
+    const users = await Promise.all(
+      accounts.map(async (account) => ({
+        ...account,
+        passwordHash: await hash(password, 10),
+      })),
+    );
+    const [admin] = users;
+    const organizationExample = await prepareOrganizationExample(password);
+    const effectiveFrom = new Date();
+
     await prisma.$transaction(async (tx) => {
       await tx.organizationalUnit.upsert({
         where: { id: unitId },
@@ -104,33 +143,7 @@ async function main() {
         });
       }
 
-      const role = await tx.systemRole.upsert({
-        where: { code: 'SYSTEM_ADMIN' },
-        update: {},
-        create: { code: 'SYSTEM_ADMIN', name: 'Quản trị hệ thống' },
-      });
-      for (const data of [
-        { code: 'USER_CREATE', name: 'Cấp tài khoản' },
-        { code: 'USER_VIEW', name: 'Xem danh sách nhân viên' },
-        { code: 'USER_UPDATE', name: 'Cập nhật trạng thái tài khoản' },
-        { code: 'ORGANIZATION_VIEW', name: 'Xem cơ cấu tổ chức' },
-        { code: 'ORGANIZATION_MANAGE', name: 'Quản lý cơ cấu tổ chức' },
-      ]) {
-        const permission = await tx.permission.upsert({
-          where: { code: data.code },
-          update: {},
-          create: data,
-        });
-        const rolePermission = {
-          systemRoleId: role.id,
-          permissionId: permission.id,
-        };
-        await tx.rolePermission.upsert({
-          where: { systemRoleId_permissionId: rolePermission },
-          update: {},
-          create: rolePermission,
-        });
-      }
+      const role = await seedSystemAdmin(tx);
       await tx.roleAssignment.upsert({
         where: { id: adminGrantId },
         update: {},

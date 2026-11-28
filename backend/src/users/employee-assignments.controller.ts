@@ -11,19 +11,29 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
+import { AuthorizationService } from '../authorization/authorization.service';
+import { CreateRoleAssignmentDto } from '../authorization/dto/create-role-assignment.dto';
+import { RoleAssignGuard } from '../authorization/guards/role-assign.guard';
 import { UserUpdateGuard } from '../authorization/guards/user-update.guard';
 import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateConcurrentAssignmentDto } from './dto/create-concurrent-assignment.dto';
 import { CreatePrimaryAssignmentDto } from './dto/create-primary-assignment.dto';
 import { TransferAssignmentDto } from './dto/transfer-assignment.dto';
 import { UpdateAssignmentManagerDto } from './dto/update-assignment-manager.dto';
-import { assignmentIdPipe, userIdPipe } from './pipes/resource-id.pipes';
+import {
+  assignmentIdPipe,
+  roleAssignmentIdPipe,
+  userIdPipe,
+} from './pipes/resource-id.pipes';
 import { UsersService } from './users.service';
 
 @Controller('employee-assignments')
 @UseGuards(AuthSessionGuard)
 export class EmployeeAssignmentsController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly authorization: AuthorizationService,
+  ) {}
 
   @Get('me')
   getMyAssignments(@Req() request: AuthenticatedRequest) {
@@ -40,6 +50,39 @@ export class EmployeeAssignmentsController {
   @UseGuards(UserViewGuard)
   getHistory(@Query('userId', userIdPipe) userId: string) {
     return this.users.getAssignmentHistory(userId);
+  }
+
+  @Get(':employeeAssignmentId/role-assignments')
+  @UseGuards(RoleAssignGuard)
+  listRoleAssignments(
+    @Param('employeeAssignmentId', assignmentIdPipe)
+    employeeAssignmentId: string,
+  ) {
+    return this.authorization.listRoleAssignments(employeeAssignmentId);
+  }
+
+  @Post(':employeeAssignmentId/role-assignments')
+  @UseGuards(RoleAssignGuard)
+  createRoleAssignment(
+    @Param('employeeAssignmentId', assignmentIdPipe)
+    employeeAssignmentId: string,
+    @Body() body: CreateRoleAssignmentDto,
+  ) {
+    return this.authorization.createRoleAssignment(employeeAssignmentId, body);
+  }
+
+  @Patch(':employeeAssignmentId/role-assignments/:roleAssignmentId/revoke')
+  @UseGuards(RoleAssignGuard)
+  revokeRoleAssignment(
+    @Param('employeeAssignmentId', assignmentIdPipe)
+    employeeAssignmentId: string,
+    @Param('roleAssignmentId', roleAssignmentIdPipe)
+    roleAssignmentId: string,
+  ) {
+    return this.authorization.revokeRoleAssignment(
+      employeeAssignmentId,
+      roleAssignmentId,
+    );
   }
 
   @Post('primary')

@@ -17,3 +17,13 @@ export const assignmentIdPipe = new ParseUUIDPipe({
       message: 'Vui lòng chọn lại phân công trong hồ sơ nhân viên.',
     }),
 });
+
+export const roleAssignmentIdPipe = new ParseUUIDPipe({
+  version: '4',
+  exceptionFactory: () =>
+    new BadRequestException({
+      statusCode: 400,
+      code: 'INVALID_ROLE_ASSIGNMENT_ID',
+      message: 'Vui lòng chọn lại lần cấp vai trò cần thu hồi.',
+    }),
+});

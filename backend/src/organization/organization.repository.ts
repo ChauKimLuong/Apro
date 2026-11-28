@@ -40,6 +40,33 @@ export class OrganizationRepository {
     });
   }
 
+  listChartUnits(now: Date) {
+    return this.database.organizationalUnit.findMany({
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      select: {
+        ...unitFields,
+        assignments: {
+          where: {
+            startedAt: { lte: now },
+            OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+          },
+          orderBy: [
+            { isPrimary: 'desc' },
+            { user: { fullName: 'asc' } },
+            { id: 'asc' },
+          ],
+          select: {
+            id: true,
+            type: true,
+            isPrimary: true,
+            user: { select: { id: true, fullName: true } },
+            position: { select: { name: true } },
+          },
+        },
+      },
+    });
+  }
+
   async createUnit(input: {
     name: string;
     type: OrganizationalUnitType;
