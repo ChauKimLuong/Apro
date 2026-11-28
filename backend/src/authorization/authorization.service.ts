@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { PermissionCode } from '../generated/prisma/client';
+import type { PermissionCode, Prisma } from '../generated/prisma/client';
 import { AuthorizationRepository } from './authorization.repository';
 import type { CreateRoleAssignmentDto } from './dto/create-role-assignment.dto';
 
@@ -18,12 +18,14 @@ export class AuthorizationService {
     actorAssignmentId: string,
     code: PermissionCode,
     targetUnitId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const allowed = await this.authorization.hasPermissionForUnit(
       userId,
       actorAssignmentId,
       code,
       targetUnitId,
+      tx,
     );
 
     if (!allowed) {

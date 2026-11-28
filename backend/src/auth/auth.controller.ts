@@ -22,29 +22,12 @@ import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthSessionGuard } from './guards/auth-session.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  async register(@Body() body: RegisterDto) {
-    const user = await this.authService.register(
-      body.fullName,
-      body.email,
-      body.password,
-    );
-
-    return {
-      ...user,
-      code: 'REGISTRATION_SUCCESS',
-      message: 'Đăng ký thành công. Tài khoản đang chờ kích hoạt.',
-    };
-  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)

@@ -1,0 +1,166 @@
+@baseUrl = http://localhost:3003
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@chiAssignmentId = 20000000-0000-4000-8000-000000000106
+@quangEmployeeId = 10000000-0000-4000-8000-000000000103
+@departmentId = 30000000-0000-4000-8000-000000000103
+@headPositionId = 40000000-0000-4000-8000-000000000104
+@missingPositionId = 70000000-0000-4000-8000-000000000001
+# Chạy tuần tự trên DB kiểm thử đã seed Công ty A. File tạo hai chức danh thử.
+
+### Chưa đăng nhập - 401 INVALID_SESSION
+# @no-cookie-jar
+PATCH {{baseUrl}}/organization/positions/{{headPositionId}}/status
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Đăng nhập Chi - 200
+# @prompt chiPassword Nhập mật khẩu của chi@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "chi@example.test",
+  "password": "{{chiPassword}}"
+}
+
+### Chi thiếu ORGANIZATION_MANAGE - 403 MISSING_PERMISSION
+PATCH {{baseUrl}}/organization/positions/{{headPositionId}}/status
+X-Employee-Assignment-Id: {{chiAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Đăng xuất Chi - 200
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập An - 200
+# @prompt anPassword Nhập mật khẩu của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": "{{anPassword}}"
+}
+
+### Tạo chức danh trống - 201 ORGANIZATION_POSITION_CREATED
+# @name createPositionForStatus
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "Chức danh kiểm thử trạng thái",
+  "type": "STAFF"
+}
+
+### Ngừng chức danh trống - 200 ORGANIZATION_POSITION_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/positions/{{createPositionForStatus.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Kích hoạt lại chức danh trống - 200 ORGANIZATION_POSITION_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/positions/{{createPositionForStatus.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Tạo phân công hiện tại cho Quang - 201 CONCURRENT_ASSIGNMENT_CREATED
+# @name addPositionStatusAssignment
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{quangEmployeeId}}",
+  "organizationalUnitId": "{{departmentId}}",
+  "positionId": "{{createPositionForStatus.response.body.$.data.id}}"
+}
+
+### Còn phân công hiện tại thì chặn ngừng - 409 ORGANIZATION_POSITION_HAS_ASSIGNMENTS
+PATCH {{baseUrl}}/organization/positions/{{createPositionForStatus.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Kết thúc phân công hiện tại - 200 CONCURRENT_ASSIGNMENT_ENDED
+PATCH {{baseUrl}}/employee-assignments/{{addPositionStatusAssignment.response.body.$.data.id}}/end
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+### Chỉ còn phân công đã kết thúc thì ngừng được - 200 ORGANIZATION_POSITION_STATUS_UPDATED
+PATCH {{baseUrl}}/organization/positions/{{createPositionForStatus.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Tạo chức danh để lên lịch - 201 ORGANIZATION_POSITION_CREATED
+# @name createScheduledPosition
+POST {{baseUrl}}/organization/positions
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "name": "Chức danh kiểm thử lên lịch",
+  "type": "STAFF"
+}
+
+### Lên lịch phân công cho Quang - 201 CONCURRENT_ASSIGNMENT_CREATED
+# @prompt futureStart Nhập thời điểm trong tương lai theo ISO 8601 có múi giờ
+POST {{baseUrl}}/employee-assignments/concurrent
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "userId": "{{quangEmployeeId}}",
+  "organizationalUnitId": "{{departmentId}}",
+  "positionId": "{{createScheduledPosition.response.body.$.data.id}}",
+  "startedAt": "{{futureStart}}"
+}
+
+### Còn phân công đã lên lịch thì chặn ngừng - 409 ORGANIZATION_POSITION_HAS_ASSIGNMENTS
+PATCH {{baseUrl}}/organization/positions/{{createScheduledPosition.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Trạng thái gửi lên ngoài hai lựa chọn - 400 VALIDATION_ERROR
+PATCH {{baseUrl}}/organization/positions/{{createPositionForStatus.response.body.$.data.id}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "LOCKED"
+}
+
+### Chức danh không tồn tại - 404 ORGANIZATION_POSITION_NOT_FOUND
+PATCH {{baseUrl}}/organization/positions/{{missingPositionId}}/status
+X-Employee-Assignment-Id: {{anAssignmentId}}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+
+### Đăng xuất An - 200
+POST {{baseUrl}}/auth/logout

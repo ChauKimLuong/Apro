@@ -7,15 +7,19 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
+import { readActorAssignmentId } from '../authorization/assignment-context';
 import { OrganizationManageGuard } from '../authorization/guards/organization-manage.guard';
 import { OrganizationViewGuard } from '../authorization/guards/organization-view.guard';
 import { UserViewGuard } from '../authorization/guards/user-view.guard';
 import { CreateOrganizationPositionDto } from './dto/create-organization-position.dto';
 import { CreateOrganizationUnitDto } from './dto/create-organization-unit.dto';
 import { UpdateOrganizationPositionDto } from './dto/update-organization-position.dto';
+import { UpdateOrganizationPositionStatusDto } from './dto/update-organization-position-status.dto';
 import { UpdateOrganizationUnitDto } from './dto/update-organization-unit.dto';
 import { UpdateOrganizationUnitStatusDto } from './dto/update-organization-unit-status.dto';
 import { OrganizationService } from './organization.service';
@@ -73,12 +77,15 @@ export class OrganizationController {
   }
 
   @Patch('units/:id/status')
-  @UseGuards(OrganizationManageGuard)
   updateUnitStatus(
+    @Req() request: AuthenticatedRequest,
     @Param('id', unitIdPipe) id: string,
     @Body() body: UpdateOrganizationUnitStatusDto,
   ) {
-    return this.organization.updateUnitStatus(id, body.status);
+    return this.organization.updateUnitStatus(id, body.status, {
+      userId: request.authUser.id,
+      assignmentId: readActorAssignmentId(request),
+    });
   }
 
   @Get('positions')
@@ -100,5 +107,14 @@ export class OrganizationController {
     @Body() body: UpdateOrganizationPositionDto,
   ) {
     return this.organization.updatePosition(id, body);
+  }
+
+  @Patch('positions/:id/status')
+  @UseGuards(OrganizationManageGuard)
+  updatePositionStatus(
+    @Param('id', positionIdPipe) id: string,
+    @Body() body: UpdateOrganizationPositionStatusDto,
+  ) {
+    return this.organization.updatePositionStatus(id, body.status);
   }
 }

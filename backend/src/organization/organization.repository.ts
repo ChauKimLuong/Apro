@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { isTransactionWriteConflict } from '../database/transaction-write-conflict';
 import {
   Prisma,
   type OrganizationalUnitStatus,
   type OrganizationalUnitType,
   type PositionType,
 } from '../generated/prisma/client';
+import type { ManagedPositionStatus } from './dto/update-organization-position-status.dto';
 
 const unitFields = {
   id: true,
@@ -201,10 +203,16 @@ export class OrganizationRepository {
     }
   }
 
-  async updateUnitStatus(id: string, status: OrganizationalUnitStatus) {
+  async updateUnitStatus(
+    id: string,
+    status: OrganizationalUnitStatus,
+    authorize: (tx: Prisma.TransactionClient) => Promise<void>,
+  ) {
     try {
       return await this.database.$transaction(
         async (tx) => {
+          await authorize(tx);
+
           const current = await tx.organizationalUnit.findUnique({
             where: { id },
             select: {
@@ -272,6 +280,51 @@ export class OrganizationRepository {
       data: { name, type },
       select: positionFields,
     });
+  }
+
+  async updatePositionStatus(id: string, status: ManagedPositionStatus) {
+    try {
+      return await this.database.$transaction(
+        async (tx) => {
+          const current = await tx.position.findUnique({
+            where: { id },
+            select: positionFields,
+          });
+
+          if (!current) return { kind: 'not-found' } as const;
+          if (current.status === status) {
+            return { kind: 'updated', position: current } as const;
+          }
+
+          if (status === 'INACTIVE') {
+            const now = new Date();
+            const assignment = await tx.employeeAssignment.findFirst({
+              where: {
+                positionId: id,
+                OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+              },
+              select: { id: true },
+            });
+
+            if (assignment) return { kind: 'assigned' } as const;
+          }
+
+          const position = await tx.position.update({
+            where: { id },
+            data: { status },
+            select: positionFields,
+          });
+
+          return { kind: 'updated', position } as const;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (isTransactionWriteConflict(error)) {
+        return { kind: 'changed' } as const;
+      }
+      throw error;
+    }
   }
 
   async updatePosition(
