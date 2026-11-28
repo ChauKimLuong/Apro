@@ -1,0 +1,58 @@
+@baseUrl = http://127.0.0.1:3004
+
+# Dùng một phân công còn hiệu lực ở phòng hoặc khối và bật cookie jar.
+
+### Đăng nhập người soạn mẫu
+# @prompt authorEmail Email người soạn
+# @prompt authorPassword Mật khẩu người soạn
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{authorEmail}}", "password": "{{authorPassword}}" }
+
+### Lấy đơn vị hiện tại và các đơn vị cấp trên - 200
+# @prompt authorAssignmentId ID phân công đang thao tác
+GET {{baseUrl}}/form-templates/target-units
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+
+### Tạo mẫu áp dụng cho cấp đã chọn - 201
+# @name targetedDraft
+# @prompt authorAssignmentId ID phân công đang thao tác
+# @prompt targetUnitId ID đơn vị áp dụng từ danh sách trên
+# @prompt draftCode Mã chưa dùng, ví dụ SCOPE_TEMPLATE_001
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "{{draftCode}}",
+  "name": "Đề nghị mua thiết bị",
+  "targetOrganizationalUnitId": "{{targetUnitId}}",
+  "fields": [{ "key": "purpose", "label": "Mục đích", "type": "TEXT" }]
+}
+
+### Tạo mẫu ở nhánh khác - 400 INVALID_FORM_TEMPLATE_TARGET_UNIT
+# @prompt authorAssignmentId ID phân công đang thao tác
+# @prompt otherUnitId UUID đơn vị thuộc nhánh khác
+# @prompt draftCode Mã chưa dùng cho ca thử
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "{{draftCode}}",
+  "name": "Mẫu ngoài phạm vi",
+  "targetOrganizationalUnitId": "{{otherUnitId}}",
+  "fields": []
+}
+
+### Gửi mẫu vừa tạo vào hàng chờ - 200
+# @prompt authorAssignmentId ID phân công đang thao tác
+POST {{baseUrl}}/form-templates/drafts/{{targetedDraft.response.body.$.data.id}}/submit
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+Content-Type: application/json
+
+{ "expectedVersion": {{targetedDraft.response.body.$.data.version}} }
+
+# Dùng review-form-template.http với người kiểm duyệt khác tài khoản.
+# Nếu mẫu áp dụng cho công ty, người chỉ có FORM_REVIEW cấp phòng không thấy mẫu và mở trực tiếp nhận 404.

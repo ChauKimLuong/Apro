@@ -3,6 +3,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -12,7 +14,10 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth-session';
 import { AuthSessionGuard } from '../auth/guards/auth-session.guard';
+import { readActorAssignmentId } from '../authorization/assignment-context';
 import { CreateFormTemplateDto } from './dto/create-form-template.dto';
+import { ReviewFormTemplateDto } from './dto/review-form-template.dto';
+import { SubmitFormTemplateDraftDto } from './dto/submit-form-template-draft.dto';
 import { UpdateFormTemplateDraftDto } from './dto/update-form-template-draft.dto';
 import { FormTemplatesService } from './form-templates.service';
 import {
@@ -30,7 +35,7 @@ const draftIdPipe = new ParseUUIDPipe({
     new BadRequestException({
       statusCode: 400,
       code: 'INVALID_FORM_TEMPLATE_ID',
-      message: 'Vui lòng chọn lại mẫu nháp từ danh sách.',
+      message: 'Vui lòng chọn lại mẫu biểu từ danh sách.',
     }),
 });
 
@@ -44,10 +49,54 @@ export class FormTemplatesController {
     return this.forms.listPresets();
   }
 
+  @Get('target-units')
+  @UseGuards(AuthSessionGuard, FormCreateGuard)
+  listTargetUnits(@Req() request: FormActorRequest) {
+    return this.forms.listTargetUnits(request.actorAssignmentId);
+  }
+
   @Get('drafts')
   @UseGuards(AuthSessionGuard, FormCreateGuard)
   listDrafts(@Req() request: FormActorRequest) {
     return this.forms.listDrafts(request.actorAssignmentId);
+  }
+
+  @Get('review-queue')
+  @UseGuards(AuthSessionGuard)
+  listReviewQueue(@Req() request: AuthenticatedRequest) {
+    return this.forms.listReviewQueue(
+      request.authUser.id,
+      readActorAssignmentId(request),
+    );
+  }
+
+  @Get('review-queue/:id')
+  @UseGuards(AuthSessionGuard)
+  getReviewDraft(
+    @Param('id', draftIdPipe) id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.forms.getReviewDraft(
+      id,
+      request.authUser.id,
+      readActorAssignmentId(request),
+    );
+  }
+
+  @Post(':id/review')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthSessionGuard)
+  reviewDraft(
+    @Param('id', draftIdPipe) id: string,
+    @Body() body: ReviewFormTemplateDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.forms.reviewDraft(
+      id,
+      body,
+      request.authUser.id,
+      readActorAssignmentId(request),
+    );
   }
 
   @Get('drafts/:id')
@@ -67,6 +116,21 @@ export class FormTemplatesController {
     @Req() request: FormActorRequest,
   ) {
     return this.forms.updateDraft(id, body, request.actorAssignmentId);
+  }
+
+  @Post('drafts/:id/submit')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthSessionGuard, FormCreateGuard)
+  submitDraft(
+    @Param('id', draftIdPipe) id: string,
+    @Body() body: SubmitFormTemplateDraftDto,
+    @Req() request: FormActorRequest,
+  ) {
+    return this.forms.submitDraft(
+      id,
+      body.expectedVersion,
+      request.actorAssignmentId,
+    );
   }
 
   @Post()

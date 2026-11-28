@@ -36,19 +36,19 @@ Content-Type: application/json
 ?? status == 200
 ?? body code == LOGIN_SUCCESS
 
-### Thành viên thiếu FORM_CREATE khi đọc danh sách
+### Thành viên đọc danh sách mẫu của phân công đang chọn
 GET {{baseUrl}}/form-templates/drafts
 X-Employee-Assignment-Id: {{memberAssignmentId}}
 
-?? status == 403
-?? body code == MISSING_PERMISSION
+?? status == 200
+?? js response.parsedBody.data.length == 0
 
-### Thành viên thiếu FORM_CREATE khi mở chi tiết
+### Thành viên mở một mẫu không tồn tại
 GET {{baseUrl}}/form-templates/drafts/{{missingDraftId}}
 X-Employee-Assignment-Id: {{memberAssignmentId}}
 
-?? status == 403
-?? body code == MISSING_PERMISSION
+?? status == 404
+?? body code == FORM_TEMPLATE_DRAFT_NOT_FOUND
 
 ### Đăng nhập quản trị viên
 POST {{baseUrl}}/auth/login
@@ -175,7 +175,7 @@ X-Employee-Assignment-Id: {{adminAssignmentId}}
 ?? body data.fieldCount == 0
 ?? js response.parsedBody.data.fields.length == 0
 
-### Đăng nhập An, có FORM_CREATE trên một phân công khác
+### Đăng nhập An để thử mở mẫu từ một phân công khác
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 

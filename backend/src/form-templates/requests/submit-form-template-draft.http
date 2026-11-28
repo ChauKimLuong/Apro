@@ -1,0 +1,62 @@
+@baseUrl = http://127.0.0.1:3004
+@authorAssignmentId = 20000000-0000-4000-8000-000000000101
+
+# Bật cookie jar trong REST Client và chạy lần lượt. Có thể đổi cổng theo backend.
+
+### Đăng nhập An để soạn mẫu - 200
+# @prompt authorPassword Nhập mật khẩu hiện tại của an@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "an@example.test", "password": "{{authorPassword}}" }
+
+### Tạo bản nháp có một trường - 201
+# @name draftForSubmission
+# @prompt draftCode Nhập mã mẫu mới, ví dụ REVIEW_QUEUE_001
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "{{draftCode}}",
+  "name": "Đề nghị mua thiết bị",
+  "fields": [{ "key": "purpose", "label": "Mục đích", "type": "TEXT" }]
+}
+
+### Gửi vào hàng chờ chung - 200 FORM_TEMPLATE_SUBMITTED
+# Kỳ vọng PENDING_REVIEW, reviewerAssignmentId = null và version giữ nguyên.
+POST {{baseUrl}}/form-templates/drafts/{{draftForSubmission.response.body.$.data.id}}/submit
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+Content-Type: application/json
+
+{ "expectedVersion": {{draftForSubmission.response.body.$.data.version}} }
+
+### Gửi lại cùng mẫu - 409 FORM_TEMPLATE_DRAFT_CHANGED
+POST {{baseUrl}}/form-templates/drafts/{{draftForSubmission.response.body.$.data.id}}/submit
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+Content-Type: application/json
+
+{ "expectedVersion": {{draftForSubmission.response.body.$.data.version}} }
+
+### Hàng chờ của An - 200, không chứa mẫu vừa gửi của chính An
+GET {{baseUrl}}/form-templates/review-queue
+X-Employee-Assignment-Id: {{authorAssignmentId}}
+
+### Đăng xuất An
+POST {{baseUrl}}/auth/logout
+
+### Đăng nhập tài khoản khác An có quyền FORM_REVIEW toàn tổ chức - 200
+# @prompt reviewerEmail Nhập email người kiểm duyệt
+# @prompt reviewerPassword Nhập mật khẩu người kiểm duyệt
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{reviewerEmail}}", "password": "{{reviewerPassword}}" }
+
+### Hàng chờ của người kiểm duyệt - 200, chứa mẫu vừa gửi của An
+# @prompt reviewerAssignmentId Nhập ID phân công đang có quyền kiểm duyệt toàn tổ chức
+GET {{baseUrl}}/form-templates/review-queue
+X-Employee-Assignment-Id: {{reviewerAssignmentId}}
+
+### Đăng xuất người kiểm duyệt
+POST {{baseUrl}}/auth/logout

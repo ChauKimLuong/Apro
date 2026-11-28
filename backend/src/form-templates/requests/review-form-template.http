@@ -1,0 +1,57 @@
+@baseUrl = http://127.0.0.1:3004
+
+# Gửi hai mẫu bằng tài khoản soạn mẫu trong submit-form-template-draft.http.
+# Đăng nhập bằng tài khoản khác có FORM_REVIEW đúng phạm vi và bật cookie jar.
+
+### Đăng nhập người kiểm duyệt
+# @prompt reviewerEmail Email người kiểm duyệt
+# @prompt reviewerPassword Mật khẩu người kiểm duyệt
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{reviewerEmail}}", "password": "{{reviewerPassword}}" }
+
+### Xem hàng chờ để lấy ID hai mẫu - 200
+# @prompt reviewerAssignmentId ID phân công kiểm duyệt đang hiệu lực
+GET {{baseUrl}}/form-templates/review-queue
+X-Employee-Assignment-Id: {{reviewerAssignmentId}}
+
+### Mở revision của mẫu thứ nhất - 200
+# @name approveTarget
+# @prompt approveDraftId ID mẫu thứ nhất từ hàng chờ
+# @prompt reviewerAssignmentId ID phân công kiểm duyệt đang hiệu lực
+GET {{baseUrl}}/form-templates/review-queue/{{approveDraftId}}
+X-Employee-Assignment-Id: {{reviewerAssignmentId}}
+
+### Duyệt mẫu thứ nhất - 200 FORM_TEMPLATE_APPROVED
+# Gửi lại request này để thử 409 FORM_TEMPLATE_REVIEW_CHANGED.
+# @prompt reviewerAssignmentId ID phân công kiểm duyệt đang hiệu lực
+POST {{baseUrl}}/form-templates/{{approveTarget.response.body.$.data.id}}/review
+X-Employee-Assignment-Id: {{reviewerAssignmentId}}
+Content-Type: application/json
+
+{
+  "decision": "APPROVE",
+  "expectedVersion": {{approveTarget.response.body.$.data.version}},
+  "expectedSubmittedAt": "{{approveTarget.response.body.$.data.submittedAt}}"
+}
+
+### Mở revision của mẫu thứ hai - 200
+# @name returnTarget
+# @prompt returnDraftId ID mẫu thứ hai từ hàng chờ
+# @prompt reviewerAssignmentId ID phân công kiểm duyệt đang hiệu lực
+GET {{baseUrl}}/form-templates/review-queue/{{returnDraftId}}
+X-Employee-Assignment-Id: {{reviewerAssignmentId}}
+
+### Trả lại mẫu thứ hai kèm góp ý - 200 FORM_TEMPLATE_RETURNED
+# @prompt reviewerAssignmentId ID phân công kiểm duyệt đang hiệu lực
+POST {{baseUrl}}/form-templates/{{returnTarget.response.body.$.data.id}}/review
+X-Employee-Assignment-Id: {{reviewerAssignmentId}}
+Content-Type: application/json
+
+{
+  "decision": "RETURN",
+  "expectedVersion": {{returnTarget.response.body.$.data.version}},
+  "expectedSubmittedAt": "{{returnTarget.response.body.$.data.submittedAt}}",
+  "comment": "Bổ sung trường Mục đích sử dụng."
+}

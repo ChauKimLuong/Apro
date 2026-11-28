@@ -6,7 +6,6 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { AuthorizationRepository } from '../src/authorization/authorization.repository';
 import { createValidationPipe } from '../src/common/pipes/app-validation.pipe';
 import { DatabaseService } from '../src/database/database.service';
 
@@ -42,18 +41,21 @@ type DraftCreated = { data: { id: string; code: string; version: number } };
 describe('Form template draft revisions (local e2e)', () => {
   let app: INestApplication<App>;
   let database: DatabaseService;
-  let authorization: AuthorizationRepository;
   let admin: ReturnType<typeof request.agent>;
   let member: ReturnType<typeof request.agent>;
   let an: ReturnType<typeof request.agent>;
   const draftIds: string[] = [];
 
-  async function createDraft() {
+  async function createDraft(
+    actor = admin,
+    assignmentId = adminAssignmentId,
+    fields = originalFields,
+  ) {
     const code = `REVISION_E2E_${randomUUID().replaceAll('-', '').toUpperCase()}`;
-    const response = await admin
+    const response = await actor
       .post(templatesPath)
-      .set(header, adminAssignmentId)
-      .send({ code, name: 'Mẫu nháp ban đầu', fields: originalFields })
+      .set(header, assignmentId)
+      .send({ code, name: 'Mẫu nháp ban đầu', fields })
       .expect(201);
     const { data } = response.body as DraftCreated;
     draftIds.push(data.id);
@@ -69,7 +71,6 @@ describe('Form template draft revisions (local e2e)', () => {
     }).compile();
 
     database = fixture.get(DatabaseService);
-    authorization = fixture.get(AuthorizationRepository);
     app = fixture.createNestApplication();
     app.useLogger(false);
     app.use(cookieParser());
@@ -286,41 +287,34 @@ describe('Form template draft revisions (local e2e)', () => {
     ).toBe(1);
   });
 
-  it('requires authentication and the specific FORM_UPDATE permission', async () => {
-    const draft = await createDraft();
+  it('allows a member without a role grant to edit their empty draft and keeps other drafts protected', async () => {
+    const otherDraft = await createDraft();
+    const ownDraft = await createDraft(member, memberAssignmentId, []);
     await request(app.getHttpServer())
-      .put(draftPath(draft.id))
-      .set(header, adminAssignmentId)
+      .put(draftPath(ownDraft.id))
+      .set(header, memberAssignmentId)
       .send(revisionInput)
       .expect(401);
     await member
-      .put(draftPath(draft.id))
-      .set(header, memberAssignmentId)
+      .put(draftPath(otherDraft.id))
+      .set(header, adminAssignmentId)
       .send(revisionInput)
       .expect(403);
+    await member
+      .put(draftPath(otherDraft.id))
+      .set(header, memberAssignmentId)
+      .send(revisionInput)
+      .expect(404);
 
-    const check = jest
-      .spyOn(authorization, 'hasPermissionOnOwnAssignment')
-      .mockImplementation((_userId, _assignmentId, permission) =>
-        Promise.resolve(permission === 'FORM_CREATE'),
-      );
-    try {
-      await updateAsAdmin(draft.id)
-        .send(revisionInput)
-        .expect(403)
-        .expect(({ body }) =>
-          expect(body).toMatchObject({
-            code: 'MISSING_PERMISSION',
-          }),
-        );
-      expect(check).toHaveBeenCalledWith(
-        expect.any(String),
-        adminAssignmentId,
-        'FORM_UPDATE',
-      );
-    } finally {
-      check.mockRestore();
-    }
+    const response = await member
+      .put(draftPath(ownDraft.id))
+      .set(header, memberAssignmentId)
+      .send(revisionInput)
+      .expect(200);
+    expect(response.body).toMatchObject({
+      code: 'FORM_TEMPLATE_DRAFT_UPDATED',
+      data: { id: ownDraft.id, version: 2, fieldCount: revisedFields.length },
+    });
   });
 
   it('returns the same 404 for a draft from another assignment, an inactive form and a missing form', async () => {
