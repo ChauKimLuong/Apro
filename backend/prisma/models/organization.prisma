@@ -81,6 +81,8 @@ model EmployeeAssignment {
   manager            EmployeeAssignment?  @relation("AssignmentManagement", fields: [managerAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_assignments_manager")
   directReports      EmployeeAssignment[] @relation("AssignmentManagement")
   roleAssignments    RoleAssignment[]
+  createdFormTemplates  FormTemplate[] @relation("FormCreator")
+  reviewedFormTemplates FormTemplate[] @relation("FormReviewer")
 
   @@unique([id, userId])
   @@index([userId], map: "ix_assignments_user")

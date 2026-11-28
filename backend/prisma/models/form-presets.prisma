@@ -1,0 +1,33 @@
+enum FormPresetKind {
+  PALETTE
+  STARTER
+
+  @@map("form_preset_kind")
+}
+
+model FormPreset {
+  code        String         @id @db.VarChar(51)
+  kind        FormPresetKind
+  name        String         @db.VarChar(120)
+  description String         @default("")
+  sortOrder   Int            @map("sort_order")
+  fields      FormPresetField[]
+
+  @@map("form_presets")
+}
+
+model FormPresetField {
+  presetCode String    @map("preset_code") @db.VarChar(51)
+  key        String    @db.VarChar(64)
+  label      String    @db.VarChar(120)
+  type       FieldType
+  isRequired Boolean   @default(false) @map("is_required")
+  options    String[]  @default([]) @db.VarChar(120)
+  sortOrder  Int       @map("sort_order")
+
+  preset FormPreset @relation(fields: [presetCode], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "fk_form_preset_fields_preset")
+
+  @@id([presetCode, key])
+  @@unique([presetCode, sortOrder])
+  @@map("form_preset_fields")
+}

@@ -39,6 +39,8 @@ async function seedSystemAdmin(tx) {
     { code: 'ORGANIZATION_VIEW', name: 'Xem cơ cấu tổ chức' },
     { code: 'ORGANIZATION_MANAGE', name: 'Quản lý cơ cấu tổ chức' },
     { code: 'ROLE_ASSIGN', name: 'Quản lý vai trò' },
+    { code: 'FORM_CREATE', name: 'Tạo mẫu biểu' },
+    { code: 'FORM_UPDATE', name: 'Chỉnh sửa mẫu biểu' },
   ]) {
     const permission = await tx.permission.upsert({
       where: { code: data.code },

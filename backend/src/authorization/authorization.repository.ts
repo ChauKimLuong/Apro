@@ -197,6 +197,19 @@ export class AuthorizationRepository {
     );
   }
 
+  async hasPermissionOnOwnAssignment(
+    userId: string,
+    actorAssignmentId: string,
+    code: PermissionCode,
+  ): Promise<boolean> {
+    const grant = await this.database.roleAssignment.findFirst({
+      where: activeGrantWhere(userId, actorAssignmentId, code, new Date()),
+      select: { id: true },
+    });
+
+    return grant !== null;
+  }
+
   async hasGlobalPermission(
     userId: string,
     actorAssignmentId: string,

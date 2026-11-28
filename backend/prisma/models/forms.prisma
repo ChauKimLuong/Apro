@@ -1,0 +1,73 @@
+enum FormTemplateStatus {
+  DRAFT
+  PENDING_REVIEW
+  RETURNED
+  ACTIVE
+  INACTIVE
+
+  @@map("form_template_status")
+}
+
+enum FieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  CHECKBOX
+  SELECT
+
+  @@map("field_type")
+}
+
+model FormTemplate {
+  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                  String             @unique
+  status                FormTemplateStatus @default(DRAFT)
+  version               Int                @default(1)
+  createdByAssignmentId String             @map("created_by_assignment_id") @db.Uuid
+  reviewerAssignmentId  String?            @map("reviewer_assignment_id") @db.Uuid
+  reviewComment         String?            @map("review_comment")
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  submittedAt           DateTime?          @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt            DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+
+  creator         EmployeeAssignment     @relation("FormCreator", fields: [createdByAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_creator")
+  reviewer        EmployeeAssignment?    @relation("FormReviewer", fields: [reviewerAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_reviewer")
+  revisions       FormTemplateRevision[] @relation("FormRevisions")
+  currentRevision FormTemplateRevision   @relation("FormCurrentRevision", fields: [id, version], references: [formTemplateId, version], onDelete: NoAction, onUpdate: NoAction, map: "fk_templates_current_revision")
+
+  @@unique([id, version])
+  @@map("form_templates")
+}
+
+model FormTemplateRevision {
+  formTemplateId String   @map("form_template_id") @db.Uuid
+  version        Int
+  name           String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  template   FormTemplate  @relation("FormRevisions", fields: [formTemplateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_revisions_template")
+  currentFor FormTemplate? @relation("FormCurrentRevision")
+  fields     FormField[]
+
+  @@id([formTemplateId, version])
+  @@map("form_template_revisions")
+}
+
+model FormField {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  formTemplateId  String    @map("form_template_id") @db.Uuid
+  templateVersion Int      @map("template_version")
+  key             String
+  label           String
+  type            FieldType
+  isRequired      Boolean   @default(false) @map("is_required")
+  sortOrder       Int       @map("sort_order")
+  options         String[]  @default([])
+
+  revision FormTemplateRevision @relation(fields: [formTemplateId, templateVersion], references: [formTemplateId, version], onDelete: NoAction, onUpdate: NoAction, map: "fk_fields_revision")
+
+  @@unique([formTemplateId, templateVersion, key])
+  @@unique([formTemplateId, templateVersion, sortOrder])
+  @@map("form_fields")
+}

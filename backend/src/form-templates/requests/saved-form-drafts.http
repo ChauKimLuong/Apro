@@ -1,0 +1,202 @@
+# Chạy toàn bộ file bằng httpYac trên database thử riêng đã chạy seed-provisioning.cjs.
+# APRO_HTTP_TEST_PASSWORD_JSON là mật khẩu seed đã được mã hóa thành chuỗi JSON.
+# APRO_HTTP_TEST_DRAFT_CODE là mã chưa dùng, ví dụ HTTP_DRAFT_001.
+@baseUrl = {{$processEnv APRO_HTTP_TEST_BASE_URL}}
+@draftCode = {{$processEnv APRO_HTTP_TEST_DRAFT_CODE}}
+@adminAssignmentId = 20000000-0000-4000-8000-000000000001
+@memberAssignmentId = 20000000-0000-4000-8000-000000000002
+@anAssignmentId = 20000000-0000-4000-8000-000000000101
+@missingDraftId = 00000000-0000-4000-8000-000000000000
+
+### Danh sách khi thiếu phiên
+# @no-cookie-jar
+GET {{baseUrl}}/form-templates/drafts
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 401
+?? body code == INVALID_SESSION
+
+### Chi tiết khi thiếu phiên
+# @no-cookie-jar
+GET {{baseUrl}}/form-templates/drafts/{{missingDraftId}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 401
+?? body code == INVALID_SESSION
+
+### Đăng nhập thành viên
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@example.test",
+  "password": {{$processEnv APRO_HTTP_TEST_PASSWORD_JSON}}
+}
+
+?? status == 200
+?? body code == LOGIN_SUCCESS
+
+### Thành viên thiếu FORM_CREATE khi đọc danh sách
+GET {{baseUrl}}/form-templates/drafts
+X-Employee-Assignment-Id: {{memberAssignmentId}}
+
+?? status == 403
+?? body code == MISSING_PERMISSION
+
+### Thành viên thiếu FORM_CREATE khi mở chi tiết
+GET {{baseUrl}}/form-templates/drafts/{{missingDraftId}}
+X-Employee-Assignment-Id: {{memberAssignmentId}}
+
+?? status == 403
+?? body code == MISSING_PERMISSION
+
+### Đăng nhập quản trị viên
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": {{$processEnv APRO_HTTP_TEST_PASSWORD_JSON}}
+}
+
+?? status == 200
+?? body code == LOGIN_SUCCESS
+
+### Đọc danh mục biểu mẫu
+GET {{baseUrl}}/form-templates/presets
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 200
+?? js response.parsedBody.data.fieldPalette.length == 6
+?? js response.parsedBody.data.starterTemplates.length == 2
+
+### Thiếu phân công đang thao tác
+GET {{baseUrl}}/form-templates/drafts
+
+?? status == 400
+?? body code == ASSIGNMENT_CONTEXT_REQUIRED
+
+### UUID mẫu sai định dạng
+GET {{baseUrl}}/form-templates/drafts/not-a-uuid
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 400
+?? body code == INVALID_FORM_TEMPLATE_ID
+
+### UUID hợp lệ của mẫu không tồn tại
+GET {{baseUrl}}/form-templates/drafts/{{missingDraftId}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 404
+?? body code == FORM_TEMPLATE_DRAFT_NOT_FOUND
+
+### Lưu bản nháp có trường bắt buộc và trường lựa chọn
+# @name savedDraft
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "{{draftCode}}",
+  "name": "Mẫu thử danh sách nháp",
+  "fields": [
+    { "key": "device_name", "label": "Tên thiết bị", "type": "TEXT", "isRequired": true },
+    { "key": "priority", "label": "Mức ưu tiên", "type": "SELECT", "options": ["Bình thường", "Khẩn"] }
+  ]
+}
+
+?? status == 201
+?? body code == FORM_TEMPLATE_CREATED
+?? body data.id exists
+?? body data.status == DRAFT
+?? body data.version == 1
+
+### Lưu bản nháp rỗng cùng tên với mã khác
+# @name emptyDraft
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "{{draftCode}}_EMPTY",
+  "name": "Mẫu thử danh sách nháp",
+  "fields": []
+}
+
+?? status == 201
+?? body code == FORM_TEMPLATE_CREATED
+?? body data.id exists
+?? js response.parsedBody.data.fields.length == 0
+
+### Tạo lại với mã đã dùng
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "{{draftCode}}",
+  "name": "Mẫu trùng mã thử nghiệm",
+  "fields": []
+}
+
+?? status == 409
+?? body code == FORM_TEMPLATE_CODE_TAKEN
+
+### Danh sách mặc định sắp mẫu mới nhất trước
+GET {{baseUrl}}/form-templates/drafts
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 200
+?? js response.parsedBody.data[0].id == {{emptyDraft.data.id}}
+?? js response.parsedBody.data[1].id == {{savedDraft.data.id}}
+?? js response.parsedBody.data[0].fieldCount == 0
+?? js response.parsedBody.data[1].fieldCount == 2
+
+### Mở chi tiết và kiểm tra phiên bản, thứ tự, nhãn và lựa chọn đã lưu
+GET {{baseUrl}}/form-templates/drafts/{{savedDraft.data.id}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 200
+?? body data.version == 1
+?? body data.fieldCount == 2
+?? js response.parsedBody.data.fields[0].key == device_name
+?? js response.parsedBody.data.fields[0].isRequired isTrue
+?? js response.parsedBody.data.fields[0].sortOrder == 1
+?? js response.parsedBody.data.fields[1].label == Mức ưu tiên
+?? js response.parsedBody.data.fields[1].sortOrder == 2
+?? js response.parsedBody.data.fields[1].options[0] == Bình thường
+?? js response.parsedBody.data.fields[1].options[1] == Khẩn
+
+### Mở chi tiết bản nháp chưa có trường
+GET {{baseUrl}}/form-templates/drafts/{{emptyDraft.data.id}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+?? status == 200
+?? body data.fieldCount == 0
+?? js response.parsedBody.data.fields.length == 0
+
+### Đăng nhập An, có FORM_CREATE trên một phân công khác
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "an@example.test",
+  "password": {{$processEnv APRO_HTTP_TEST_PASSWORD_JSON}}
+}
+
+?? status == 200
+?? body code == LOGIN_SUCCESS
+
+### Phân công có quyền nhưng chưa tạo mẫu nháp
+GET {{baseUrl}}/form-templates/drafts
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+?? status == 200
+?? js response.parsedBody.data.length == 0
+
+### An dùng phân công của mình để mở mẫu do admin tạo
+GET {{baseUrl}}/form-templates/drafts/{{savedDraft.data.id}}
+X-Employee-Assignment-Id: {{anAssignmentId}}
+
+?? status == 404
+?? body code == FORM_TEMPLATE_DRAFT_NOT_FOUND

@@ -1,0 +1,76 @@
+@baseUrl = http://localhost:3002
+@adminAssignmentId = 20000000-0000-4000-8000-000000000001
+
+### Đăng nhập quản trị viên local
+# @prompt adminPassword Nhập mật khẩu hiện tại của admin@example.test
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.test",
+  "password": "{{adminPassword}}"
+}
+
+### Đọc danh mục mẫu, kỳ vọng 200
+GET {{baseUrl}}/form-templates/presets
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+### Tạo mẫu nháp, kỳ vọng 201 FORM_TEMPLATE_CREATED
+POST {{baseUrl}}/form-templates
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+Content-Type: application/json
+
+{
+  "code": "DEVICE_PURCHASE",
+  "name": "Đề nghị mua thiết bị",
+  "fields": [
+    {
+      "key": "device_name",
+      "label": "Tên thiết bị",
+      "type": "TEXT",
+      "isRequired": true
+    },
+    {
+      "key": "priority",
+      "label": "Mức ưu tiên",
+      "type": "SELECT",
+      "isRequired": true,
+      "options": ["Bình thường", "Khẩn"]
+    }
+  ]
+}
+
+### Danh sách bản nháp của phân công đang chọn, kỳ vọng 200
+GET {{baseUrl}}/form-templates/drafts
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+### Mở bản nháp để lấy phiên bản hiện tại, kỳ vọng 200
+# @name draftForEdit
+# @prompt draftId Dán id của mẫu từ phản hồi danh sách
+GET {{baseUrl}}/form-templates/drafts/{{draftId}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+
+### Lưu revision mới, kỳ vọng 200 FORM_TEMPLATE_DRAFT_UPDATED
+# Gửi lại request PUT này trước khi chạy lại GET để thử ca 409.
+PUT {{baseUrl}}/form-templates/drafts/{{draftForEdit.response.body.$.data.id}}
+X-Employee-Assignment-Id: {{adminAssignmentId}}
+Content-Type: application/json
+
+{
+  "expectedVersion": {{draftForEdit.response.body.$.data.version}},
+  "name": "Đề nghị mua thiết bị nội bộ",
+  "fields": [
+    {
+      "key": "device_name",
+      "label": "Tên thiết bị cần mua",
+      "type": "TEXT",
+      "isRequired": true
+    },
+    {
+      "key": "priority",
+      "label": "Mức ưu tiên",
+      "type": "SELECT",
+      "options": ["Bình thường", "Khẩn"]
+    }
+  ]
+}
